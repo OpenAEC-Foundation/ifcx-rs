@@ -1,0 +1,16 @@
+[package]
+name = "ifcx-geometry"
+description = "Geometry kernel for IFCX — OpenCascade BREP, triangulation, LOD, spatial index"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+ifcx-core = { workspace = true }
+thiserror = { workspace = true }
+
+# OpenCascade bindings — uncomment when build toolchain is ready
+# opencascade-rs = { workspace = true }
+
+# Spatial index
+# bvh = { workspace = true }

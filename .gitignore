@@ -1,0 +1,25 @@
+/target
+**/*.rs.bk
+Cargo.lock
+*.pdb
+*.dll
+*.so
+*.dylib
+
+# Python
+__pycache__/
+*.pyc
+*.pyd
+.venv/
+
+# WASM
+pkg/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+Thumbs.db
+.DS_Store

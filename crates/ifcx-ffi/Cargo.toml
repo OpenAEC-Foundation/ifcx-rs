@@ -1,0 +1,16 @@
+[package]
+name = "ifcx-ffi"
+description = "C ABI exports for ifcx-core — builds to DLL/SO"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+ifcx-core = { workspace = true }
+serde_json = { workspace = true }
+
+[build-dependencies]
+cbindgen = "0.27"

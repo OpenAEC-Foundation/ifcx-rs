@@ -1,0 +1,68 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/ifcx-core",
+    "crates/ifcx-geometry",
+    "crates/ifcx-editor",
+    "crates/ifcx-api",
+    "crates/ifcx-ffi",
+    "crates/ifcx-wasm",
+    "crates/ifcx-python",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR LGPL-3.0-or-later"
+repository = "https://github.com/3bm-bouwkunde/ifcx-rs"
+
+[workspace.dependencies]
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Performance JSON parsing (SIMD)
+sonic-rs = "0.3"
+
+# Schema
+schemars = "0.8"
+
+# ECS
+hecs = "0.10"
+
+# Parallelism
+rayon = "1.10"
+
+# Binary cache
+rkyv = { version = "0.8", features = ["validation"] }
+
+# Memory-mapped IO
+memmap2 = "0.9"
+
+# Spatial index
+bvh = "0.9"
+
+# UUID
+uuid = { version = "1", features = ["v4"] }
+
+# Error handling
+thiserror = "2"
+
+# Web server
+axum = "0.8"
+tokio = { version = "1", features = ["full"] }
+tower-http = { version = "0.6", features = ["cors"] }
+
+# Geometry kernel (OpenCascade bindings)
+# opencascade-rs = "0.2"  # uncomment when ready
+
+# WASM
+wasm-bindgen = "0.2"
+
+# Python
+pyo3 = { version = "0.23", features = ["extension-module"] }
+
+# Internal crates
+ifcx-core = { path = "crates/ifcx-core" }
+ifcx-geometry = { path = "crates/ifcx-geometry" }
+ifcx-editor = { path = "crates/ifcx-editor" }

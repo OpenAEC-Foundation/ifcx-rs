@@ -1,0 +1,1186 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ifcx-rs · Architecture</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:       #080c10;
+  --surface:  #0d1117;
+  --surface2: #161b22;
+  --border:   #21262d;
+  --border2:  #30363d;
+  --text:     #e6edf3;
+  --muted:    #8b949e;
+  --dim:      #484f58;
+  --rust:     #e05a2b;
+  --rust-dim: #7d3218;
+  --green:    #3fb950;
+  --blue:     #58a6ff;
+  --amber:    #e8a020;
+  --purple:   #bc8cff;
+  --panel-w:  380px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'JetBrains Mono', monospace;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ── SCANLINE OVERLAY ───────────────────────────── */
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0,0,0,0.03) 2px,
+    rgba(0,0,0,0.03) 4px
+  );
+  pointer-events: none;
+  z-index: 1000;
+}
+
+/* ── GRID BACKGROUND ────────────────────────────── */
+body::after {
+  content: '';
+  position: fixed; inset: 0;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.015) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ── HEADER ─────────────────────────────────────── */
+header {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(8,12,16,0.92);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  padding: 14px 32px;
+  display: flex; align-items: center; gap: 24px;
+}
+.logo {
+  font-family: 'Syne', sans-serif;
+  font-size: 18px; font-weight: 800;
+  letter-spacing: -1px;
+}
+.logo em { color: var(--rust); font-style: normal; }
+.logo span { color: var(--muted); font-weight: 700; font-size: 13px; margin-left: 6px; }
+
+.header-sep { width: 1px; height: 24px; background: var(--border2); }
+
+.phase-filters {
+  display: flex; gap: 4px;
+}
+.pfbtn {
+  background: none; border: 1px solid var(--border2);
+  color: var(--muted); font-family: 'JetBrains Mono', monospace;
+  font-size: 9px; letter-spacing: 1px; text-transform: uppercase;
+  padding: 4px 10px; border-radius: 3px; cursor: pointer;
+  transition: all .15s;
+}
+.pfbtn:hover  { border-color: var(--rust); color: var(--rust); }
+.pfbtn.active { background: var(--rust); border-color: var(--rust); color: #fff; }
+
+.dist-filters {
+  display: flex; gap: 4px; margin-left: auto;
+}
+.dfbtn {
+  background: none; border: 1px solid var(--border2);
+  color: var(--muted); font-family: 'JetBrains Mono', monospace;
+  font-size: 9px; letter-spacing: 1px; text-transform: uppercase;
+  padding: 4px 10px; border-radius: 3px; cursor: pointer;
+  transition: all .15s;
+}
+.dfbtn:hover  { border-color: var(--amber); color: var(--amber); }
+.dfbtn.active { background: var(--amber); border-color: var(--amber); color: #000; }
+
+.perf-badge {
+  margin-left: 8px;
+  font-size: 8px; color: var(--purple);
+  border: 1px solid var(--purple);
+  padding: 3px 8px; border-radius: 2px;
+  letter-spacing: 1px; text-transform: uppercase;
+  animation: pulse-border 2s ease-in-out infinite;
+}
+@keyframes pulse-border {
+  0%,100% { border-color: var(--purple); box-shadow: none; }
+  50% { border-color: var(--purple); box-shadow: 0 0 8px var(--purple)44; }
+}
+
+/* ── MAIN LAYOUT ────────────────────────────────── */
+main {
+  position: relative; z-index: 1;
+  padding: 28px 32px;
+  transition: padding-right .3s ease;
+}
+main.panel-open { padding-right: calc(var(--panel-w) + 48px); }
+
+/* SVG connections overlay */
+#connections {
+  position: absolute; inset: 0;
+  pointer-events: none; z-index: 0;
+  overflow: visible;
+}
+
+/* ── THREE-COLUMN GRID ──────────────────────────── */
+.arch-grid {
+  display: grid;
+  grid-template-columns: 210px 1fr 210px;
+  gap: 20px;
+  position: relative; z-index: 2;
+}
+
+/* ── SECTION HEADERS ────────────────────────────── */
+.sec-head {
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 12px;
+}
+.sec-num {
+  width: 22px; height: 22px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 9px; font-weight: 700; flex-shrink: 0;
+}
+.sec-label { font-size: 8px; letter-spacing: 2px; text-transform: uppercase; }
+.sec-line  { flex: 1; height: 1px; }
+
+/* ── NODE CARDS ─────────────────────────────────── */
+.node {
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: 5px;
+  padding: 10px 12px;
+  margin-bottom: 7px;
+  cursor: pointer;
+  transition: all .2s;
+  position: relative;
+  overflow: hidden;
+}
+.node::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(135deg, transparent 60%, rgba(255,255,255,0.02));
+  pointer-events: none;
+}
+.node:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+}
+.node.selected { box-shadow: 0 0 0 1px currentColor, 0 4px 20px rgba(0,0,0,0.5); }
+
+.node-title {
+  font-size: 10px; font-weight: 700; letter-spacing: .3px;
+  display: flex; align-items: center; gap: 6px;
+  margin-bottom: 6px;
+}
+.badge {
+  font-size: 7px; padding: 1px 5px; border-radius: 2px;
+  letter-spacing: 1px; text-transform: uppercase;
+  white-space: nowrap;
+}
+.node-item {
+  display: flex; align-items: center; gap: 5px;
+  margin-bottom: 2px;
+}
+.node-dot { width: 3px; height: 3px; border-radius: 50%; flex-shrink: 0; }
+.node-text { font-size: 9px; color: var(--muted); }
+
+/* phase dimming */
+.node.dimmed { opacity: .2; pointer-events: none; }
+.node.highlighted { opacity: 1; }
+
+/* ── DIST TARGET ROW ────────────────────────────── */
+.dist-row {
+  display: grid;
+  grid-template-columns: repeat(4,1fr);
+  gap: 7px; margin-bottom: 12px;
+}
+.dist-node {
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: 5px; padding: 9px 10px;
+  cursor: pointer; transition: all .2s;
+}
+.dist-node:hover { transform: translateY(-2px); }
+.dist-node.active-dist { box-shadow: 0 0 0 1px currentColor; }
+.dist-label { font-size: 9px; font-weight: 700; margin-bottom: 5px; display: flex; align-items: center; gap: 5px; }
+.dist-item  { font-size: 8px; color: var(--muted); margin-bottom: 2px; display: flex; align-items: center; gap: 4px; }
+.dist-item::before { content: '·'; }
+
+/* ── KERNEL BLOCK ───────────────────────────────── */
+.kernel-wrap {
+  border: 1px solid #e05a2b44;
+  background: #e05a2b08;
+  border-radius: 7px; padding: 12px;
+  margin-bottom: 10px;
+}
+.kernel-title {
+  font-size: 10px; font-weight: 700; color: var(--rust);
+  display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
+}
+
+/* ── API GRID ───────────────────────────────────── */
+.api-grid {
+  display: grid; grid-template-columns: repeat(3,1fr); gap: 5px;
+  margin-bottom: 10px;
+}
+.api-ep {
+  background: var(--bg); border: 1px solid var(--border2);
+  border-radius: 4px; padding: 5px 7px; cursor: pointer; transition: all .15s;
+}
+.api-ep:hover { border-color: var(--rust); }
+.api-ep .method { font-size: 8px; color: var(--rust); margin-bottom: 1px; }
+.api-ep .desc   { font-size: 7px; color: var(--dim); }
+
+/* ── TWO COL MODULES ────────────────────────────── */
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-bottom: 8px; }
+
+/* ── PERFORMANCE GRID ───────────────────────────── */
+.perf-wrap {
+  border: 1px solid #bc8cff33; background: #bc8cff06;
+  border-radius: 7px; padding: 12px; margin-bottom: 10px;
+}
+.perf-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+.perf-item {
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: 4px; padding: 7px 9px;
+}
+.perf-prob { font-size: 8px; color: var(--dim); margin-bottom: 3px; }
+.perf-sol  { font-size: 9px; color: var(--purple); margin-bottom: 2px; font-weight: 500; }
+.perf-bar-wrap { height: 2px; background: var(--border); border-radius: 1px; margin: 4px 0 2px; }
+.perf-bar { height: 2px; border-radius: 1px; background: var(--purple); width: 0; transition: width 1.2s cubic-bezier(.4,0,.2,1); }
+.perf-gain { font-size: 7px; color: var(--purple); opacity: .7; }
+
+/* ── LAZY PIPELINE ──────────────────────────────── */
+.lazy-wrap {
+  border: 1px solid #e8a02033; background: #e8a02006;
+  border-radius: 7px; padding: 12px; margin-bottom: 10px;
+}
+.lazy-pipe {
+  display: grid; grid-template-columns: repeat(5,1fr) ;
+  gap: 0; margin-top: 10px; position: relative;
+}
+.lazy-step {
+  background: var(--bg); border: 1px solid var(--border2);
+  border-radius: 4px; padding: 8px 6px; text-align: center;
+  cursor: pointer; transition: all .2s; position: relative;
+  z-index: 2;
+}
+.lazy-step:hover, .lazy-step.active-step {
+  border-color: var(--amber);
+  box-shadow: 0 0 12px #e8a02033;
+}
+.lazy-step + .lazy-step { margin-left: -1px; border-radius: 0; }
+.lazy-step:first-child { border-radius: 4px 0 0 4px; }
+.lazy-step:last-child  { border-radius: 0 4px 4px 0; }
+.ls-icon  { font-size: 16px; margin-bottom: 3px; }
+.ls-title { font-size: 8px; color: var(--amber); margin-bottom: 2px; font-weight: 600; }
+.ls-desc  { font-size: 7px; color: var(--dim); line-height: 1.4; }
+
+/* data flow animation across lazy steps */
+.lazy-flow {
+  position: absolute; top: 50%; left: 0; right: 0;
+  height: 2px; background: transparent;
+  overflow: hidden; pointer-events: none;
+}
+.lazy-flow-dot {
+  position: absolute; width: 24px; height: 2px;
+  background: linear-gradient(90deg, transparent, var(--amber), transparent);
+  animation: flow-right 2.5s linear infinite;
+  opacity: 0;
+}
+@keyframes flow-right {
+  0%   { left: -10%; opacity: 0; }
+  10%  { opacity: 1; }
+  90%  { opacity: 1; }
+  100% { left: 110%; opacity: 0; }
+}
+
+/* ── CACHE FLOW ─────────────────────────────────── */
+.cache-row {
+  display: grid; grid-template-columns: 1fr auto 1fr auto 1fr;
+  gap: 4px; align-items: center;
+}
+.cache-node {
+  background: var(--bg); border: 1px solid var(--border2);
+  border-radius: 4px; padding: 6px 8px; text-align: center;
+}
+.cache-arrow { color: var(--border2); font-size: 14px; text-align: center; }
+.cn-label { font-size: 8px; margin-bottom: 1px; }
+.cn-desc  { font-size: 7px; color: var(--dim); }
+
+/* ── LAYER COMPOSITOR ───────────────────────────── */
+.layer-comp { background: var(--surface2); border: 1px solid var(--border); border-radius: 5px; padding: 10px 12px; }
+.layer-item { display: flex; align-items: center; gap: 7px; border-radius: 4px; padding: 4px 7px; margin-bottom: 2px; }
+.layer-sq   { width: 5px; height: 5px; border-radius: 1px; flex-shrink: 0; }
+.layer-lbl  { font-size: 9px; }
+.layer-desc { font-size: 8px; color: var(--dim); margin-left: auto; }
+.layer-conn { display: flex; justify-content: center; }
+.layer-conn div { width: 1px; height: 7px; background: var(--border2); }
+
+/* ── DETAIL PANEL ───────────────────────────────── */
+#detail-panel {
+  position: fixed; top: 0; right: 0; bottom: 0;
+  width: var(--panel-w);
+  background: var(--surface);
+  border-left: 1px solid var(--border2);
+  z-index: 500;
+  transform: translateX(100%);
+  transition: transform .3s cubic-bezier(.4,0,.2,1);
+  overflow-y: auto;
+  display: flex; flex-direction: column;
+}
+#detail-panel.open { transform: translateX(0); }
+.panel-header {
+  padding: 20px 20px 14px;
+  border-bottom: 1px solid var(--border);
+  position: sticky; top: 0;
+  background: var(--surface);
+  z-index: 1;
+}
+.panel-sup  { font-size: 8px; color: var(--dim); letter-spacing: 2px; text-transform: uppercase; margin-bottom: 4px; }
+.panel-title { font-size: 14px; font-weight: 700; }
+.panel-close {
+  position: absolute; top: 16px; right: 16px;
+  width: 26px; height: 26px;
+  background: var(--surface2); border: 1px solid var(--border2);
+  border-radius: 3px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; color: var(--muted); transition: all .15s;
+}
+.panel-close:hover { border-color: var(--rust); color: var(--rust); }
+.panel-body { padding: 16px 20px; flex: 1; }
+.panel-section { margin-bottom: 18px; }
+.panel-section-title { font-size: 8px; color: var(--dim); letter-spacing: 2px; text-transform: uppercase; margin-bottom: 8px; border-bottom: 1px solid var(--border); padding-bottom: 4px; }
+.panel-item { font-size: 10px; color: var(--muted); margin-bottom: 5px; display: flex; gap: 8px; }
+.panel-item::before { content: '→'; color: var(--rust); flex-shrink: 0; }
+.panel-crate {
+  background: var(--bg); border: 1px solid var(--border2);
+  border-radius: 4px; padding: 6px 10px; margin-bottom: 5px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.crate-name  { font-size: 9px; color: var(--green); }
+.crate-why   { font-size: 8px; color: var(--dim); }
+.panel-note {
+  background: var(--rust)11; border: 1px solid var(--rust)33;
+  border-radius: 4px; padding: 8px 10px;
+  font-size: 9px; color: var(--muted); line-height: 1.6;
+}
+
+/* ── FOOTER ─────────────────────────────────────── */
+footer {
+  position: relative; z-index: 2;
+  padding: 16px 32px; border-top: 1px solid var(--border);
+  display: flex; gap: 6px; flex-wrap: wrap; align-items: center;
+}
+.ft-badge { font-size: 7px; padding: 2px 7px; border-radius: 2px; letter-spacing: 1px; text-transform: uppercase; }
+.ft-copy  { font-size: 8px; color: var(--dim); margin-left: auto; }
+
+/* ── TOOLTIP ─────────────────────────────────────── */
+#tooltip {
+  position: fixed; z-index: 900;
+  background: var(--surface2); border: 1px solid var(--border2);
+  border-radius: 4px; padding: 6px 10px;
+  font-size: 8px; color: var(--muted);
+  pointer-events: none; opacity: 0;
+  transition: opacity .15s;
+  max-width: 200px; line-height: 1.5;
+}
+#tooltip.show { opacity: 1; }
+
+/* ── SCROLL ANIMATIONS ──────────────────────────── */
+.reveal { opacity: 0; transform: translateY(12px); transition: all .5s; }
+.reveal.visible { opacity: 1; transform: none; }
+
+/* ── PULSE DOTS on connections ──────────────────── */
+@keyframes dash-flow {
+  to { stroke-dashoffset: -20; }
+}
+.flow-line {
+  stroke-dasharray: 4 6;
+  animation: dash-flow 1.2s linear infinite;
+}
+</style>
+</head>
+<body>
+
+<!-- ═══ HEADER ═══════════════════════════════════════════════════════ -->
+<header>
+  <div class="logo"><em>ifcx-rs</em><span>· System Architecture</span></div>
+  <div class="header-sep"></div>
+
+  <div class="phase-filters">
+    <button class="pfbtn active" onclick="filterPhase('all')">Alles</button>
+    <button class="pfbtn" onclick="filterPhase('0')">Distributie</button>
+    <button class="pfbtn" onclick="filterPhase('1')">Fase 1 · Kernel</button>
+    <button class="pfbtn" onclick="filterPhase('2')">Fase 2 · Geometry</button>
+    <button class="pfbtn" onclick="filterPhase('3')">Fase 3 · Editor</button>
+  </div>
+
+  <div class="dist-filters">
+    <button class="dfbtn" onclick="filterDist('dll')">DLL/SO</button>
+    <button class="dfbtn" onclick="filterDist('server')">Server</button>
+    <button class="dfbtn" onclick="filterDist('tauri')">Tauri</button>
+    <button class="dfbtn" onclick="filterDist('wasm')">WASM</button>
+  </div>
+
+  <div class="perf-badge">⚡ 500MB+ baseline</div>
+</header>
+
+<!-- ═══ MAIN ══════════════════════════════════════════════════════════ -->
+<main id="main">
+
+  <!-- SVG connections (drawn by JS) -->
+  <svg id="connections" width="100%" height="100%"></svg>
+
+  <div class="arch-grid">
+
+    <!-- ╔════════════════════╗ -->
+    <!-- ║ LEFT · Consumers   ║ -->
+    <!-- ╚════════════════════╝ -->
+    <div>
+      <div class="sec-head">
+        <div class="sec-num" style="background:#58a6ff22;border:1px solid #58a6ff;color:#58a6ff;">↓</div>
+        <div class="sec-label" style="color:#58a6ff;">Consumers</div>
+        <div class="sec-line" style="background:#58a6ff22;"></div>
+      </div>
+
+      <div class="node reveal" id="n-warmte" data-phase="1" data-color="#e05a2b" data-detail="warmte"
+           style="border-color:#e05a2b55;" onclick="openPanel('warmte')" onmouseenter="showTip(event,'Rust API · DLL offline · IFCX queries')" onmouseleave="hideTip()">
+        <div class="node-title" style="color:#e05a2b;">
+          Warmteverlies API
+          <span class="badge" style="background:#e05a2b22;color:#e05a2b;border:1px solid #e05a2b44;">Rust</span>
+        </div>
+        <div class="node-item"><div class="node-dot" style="background:#e05a2b;"></div><span class="node-text">U-waarden / transmissie</span></div>
+        <div class="node-item"><div class="node-dot" style="background:#e05a2b;"></div><span class="node-text">IFCX query → resultaat</span></div>
+        <div class="node-item"><div class="node-dot" style="background:#e05a2b;"></div><span class="node-text">DLL call (offline)</span></div>
+      </div>
+
+      <div class="node reveal" id="n-struct" data-phase="1" data-color="#58a6ff" data-detail="struct"
+           style="border-color:#58a6ff55;" onclick="openPanel('struct')" onmouseenter="showTip(event,'Constructief · belasting queries · IFCX in/out')" onmouseleave="hideTip()">
+        <div class="node-title" style="color:#58a6ff;">
+          Constructief Tool
+          <span class="badge" style="background:#8b949e22;color:#8b949e;border:1px solid #8b949e44;">tbd</span>
+        </div>
+        <div class="node-item"><div class="node-dot" style="background:#58a6ff;"></div><span class="node-text">belasting uit model</span></div>
+        <div class="node-item"><div class="node-dot" style="background:#58a6ff;"></div><span class="node-text">element queries</span></div>
+        <div class="node-item"><div class="node-dot" style="background:#58a6ff;"></div><span class="node-text">DLL call (offline)</span></div>
+      </div>
+
+      <div class="node reveal" id="n-python" data-phase="1" data-color="#3fb950" data-detail="python"
+           style="border-color:#3fb95055;" onclick="openPanel('python')" onmouseenter="showTip(event,'PyO3 bindings · IfcOpenShell bridge')" onmouseleave="hideTip()">
+        <div class="node-title" style="color:#3fb950;">
+          Python / IfcOpenShell
+          <span class="badge" style="background:#3fb95022;color:#3fb950;border:1px solid #3fb95044;">PyO3</span>
+        </div>
+        <div class="node-item"><div class="node-dot" style="background:#3fb950;"></div><span class="node-text">bridge naar bestaande tools</span></div>
+        <div class="node-item"><div class="node-dot" style="background:#3fb950;"></div><span class="node-text">batch verwerking</span></div>
+        <div class="node-item"><div class="node-dot" style="background:#3fb950;"></div><span class="node-text">.pyd / .so bindings</span></div>
+      </div>
+
+      <div class="node reveal" id="n-editor" data-phase="3" data-color="#e8a020" data-detail="editor"
+           style="border-color:#e8a02055;" onclick="openPanel('editor')" onmouseenter="showTip(event,'Fase 3 · Tauri desktop + browser + WASM')" onmouseleave="hideTip()">
+        <div class="node-title" style="color:#e8a020;">
+          3D Editor
+          <span class="badge" style="background:#e8a02022;color:#e8a020;border:1px solid #e8a02044;">Fase 3</span>
+        </div>
+        <div class="node-item"><div class="node-dot" style="background:#e8a020;"></div><span class="node-text">WebGPU / wgpu rendering</span></div>
+        <div class="node-item"><div class="node-dot" style="background:#e8a020;"></div><span class="node-text">non-destructive layers</span></div>
+        <div class="node-item"><div class="node-dot" style="background:#e8a020;"></div><span class="node-text">desktop + browser + Tauri</span></div>
+      </div>
+
+      <div class="node reveal" id="n-bim" data-phase="1" data-color="#8b949e" data-detail="bim"
+           style="border-color:#8b949e55;" onclick="openPanel('bim')" onmouseenter="showTip(event,'Externe tools · Revit / ArchiCAD · IFC4 → IFCX')" onmouseleave="hideTip()">
+        <div class="node-title" style="color:#8b949e;">
+          Externe BIM tools
+          <span class="badge" style="background:#8b949e22;color:#8b949e;border:1px solid #8b949e44;">HTTP</span>
+        </div>
+        <div class="node-item"><div class="node-dot" style="background:#8b949e;"></div><span class="node-text">Revit / ArchiCAD export</span></div>
+        <div class="node-item"><div class="node-dot" style="background:#8b949e;"></div><span class="node-text">IFC4 → IFCX bridge</span></div>
+        <div class="node-item"><div class="node-dot" style="background:#8b949e;"></div><span class="node-text">REST JSON in/out</span></div>
+      </div>
+    </div>
+
+    <!-- ╔══════════════════════════════════╗ -->
+    <!-- ║ CENTER · ifcx-rs kernel          ║ -->
+    <!-- ╚══════════════════════════════════╝ -->
+    <div>
+
+      <!-- DISTRIBUTION TARGETS -->
+      <div class="sec-head reveal">
+        <div class="sec-num" style="background:#e8a02022;border:1px solid #e8a020;color:#e8a020;">0</div>
+        <div class="sec-label" style="color:#e8a020;">Distribution targets — één codebase, vier builds</div>
+        <div class="sec-line" style="background:#e8a02022;"></div>
+      </div>
+
+      <div class="dist-row reveal">
+        <div class="dist-node" id="dt-dll" data-dist="dll" style="border-color:#e8a02055;" onclick="openPanel('dist-dll')" onmouseenter="showTip(event,'ifcx.dll · libifcx.so · directe C-ABI · geen netwerk')" onmouseleave="hideTip()">
+          <div class="dist-label" style="color:#e8a020;">
+            <span>cdylib · DLL/SO</span>
+            <span class="badge" style="background:#e8a02022;color:#e8a020;border:1px solid #e8a02044;">offline</span>
+          </div>
+          <div class="dist-item" style="color:#8b949e;">ifcx.dll (Windows)</div>
+          <div class="dist-item" style="color:#8b949e;">libifcx.so (Linux)</div>
+          <div class="dist-item" style="color:#8b949e;">C-ABI integratie</div>
+        </div>
+        <div class="dist-node" id="dt-server" data-dist="server" style="border-color:#e05a2b55;" onclick="openPanel('dist-server')" onmouseenter="showTip(event,'Axum HTTP · Docker/NAS · IFCX in/out · WebSocket')" onmouseleave="hideTip()">
+          <div class="dist-label" style="color:#e05a2b;">
+            <span>bin · Axum server</span>
+            <span class="badge" style="background:#e05a2b22;color:#e05a2b;border:1px solid #e05a2b44;">LAN</span>
+          </div>
+          <div class="dist-item" style="color:#8b949e;">HTTP REST API</div>
+          <div class="dist-item" style="color:#8b949e;">Docker / NAS</div>
+          <div class="dist-item" style="color:#8b949e;">WebSocket streaming</div>
+        </div>
+        <div class="dist-node" id="dt-tauri" data-dist="tauri" style="border-color:#e8a02055;" onclick="openPanel('dist-tauri')" onmouseenter="showTip(event,'Tauri v2 · Rust core embedded · WebView · <15MB installer')" onmouseleave="hideTip()">
+          <div class="dist-label" style="color:#e8a020;">
+            <span>Tauri · desktop</span>
+            <span class="badge" style="background:#e8a02022;color:#e8a020;border:1px solid #e8a02044;">offline</span>
+          </div>
+          <div class="dist-item" style="color:#8b949e;">Rust core embedded</div>
+          <div class="dist-item" style="color:#8b949e;">Win / Linux / macOS</div>
+          <div class="dist-item" style="color:#8b949e;">&lt;15MB installer</div>
+        </div>
+        <div class="dist-node" id="dt-wasm" data-dist="wasm" style="border-color:#58a6ff55;" onclick="openPanel('dist-wasm')" onmouseenter="showTip(event,'wasm-bindgen · ~3-6MB binary · PWA capable')" onmouseleave="hideTip()">
+          <div class="dist-label" style="color:#58a6ff;">
+            <span>WASM · browser</span>
+            <span class="badge" style="background:#58a6ff22;color:#58a6ff;border:1px solid #58a6ff44;">PWA</span>
+          </div>
+          <div class="dist-item" style="color:#8b949e;">wasm-bindgen</div>
+          <div class="dist-item" style="color:#8b949e;">~3–6 MB binary</div>
+          <div class="dist-item" style="color:#8b949e;">offline capable</div>
+        </div>
+      </div>
+
+      <!-- KERNEL -->
+      <div class="sec-head reveal" style="margin-top:4px;">
+        <div class="sec-num" style="background:#e05a2b22;border:1px solid #e05a2b;color:#e05a2b;">1</div>
+        <div class="sec-label" style="color:#e05a2b;">ifcx-rs kernel · IFCX = enige source of truth</div>
+        <div class="sec-line" style="background:#e05a2b22;"></div>
+      </div>
+
+      <div class="kernel-wrap reveal">
+        <div class="kernel-title">
+          api/ · Axum HTTP
+          <span class="badge" style="background:#e05a2b22;color:#e05a2b;border:1px solid #e05a2b44;">server build only · IFCX in/out</span>
+        </div>
+        <div class="api-grid">
+          <div class="api-ep" onclick="openPanel('api')" onmouseenter="showTip(event,'Streamt node-index, nooit full file')" onmouseleave="hideTip()">
+            <div class="method">GET /nodes</div><div class="desc">query entities</div>
+          </div>
+          <div class="api-ep" onclick="openPanel('api')" onmouseenter="showTip(event,'Lazy: laad payload op GUID, niet alles')" onmouseleave="hideTip()">
+            <div class="method">GET /nodes/:guid</div><div class="desc">lazy load payload</div>
+          </div>
+          <div class="api-ep" onclick="openPanel('api')" onmouseenter="showTip(event,'Filter op component type')" onmouseleave="hideTip()">
+            <div class="method">GET /components</div><div class="desc">filter components</div>
+          </div>
+          <div class="api-ep" onclick="openPanel('api')" onmouseenter="showTip(event,'Validatie tegen ifcx.dev live schema')" onmouseleave="hideTip()">
+            <div class="method">POST /validate</div><div class="desc">schema check</div>
+          </div>
+          <div class="api-ep" onclick="openPanel('api')" onmouseenter="showTip(event,'Merge base + delta layers naar view')" onmouseleave="hideTip()">
+            <div class="method">POST /merge</div><div class="desc">layer compositie</div>
+          </div>
+          <div class="api-ep" onclick="openPanel('api')" onmouseenter="showTip(event,'Mesh on demand, LOD gebaseerd op request')" onmouseleave="hideTip()">
+            <div class="method">GET /geometry</div><div class="desc">mesh on demand</div>
+          </div>
+          <div class="api-ep" onclick="openPanel('api')" onmouseenter="showTip(event,'BVH query · alleen zichtbare nodes terug')" onmouseleave="hideTip()">
+            <div class="method">GET /spatial</div><div class="desc">viewport query</div>
+          </div>
+          <div class="api-ep" onclick="openPanel('api')" onmouseenter="showTip(event,'Cache hit/miss status per model')" onmouseleave="hideTip()">
+            <div class="method">GET /cache</div><div class="desc">cache status</div>
+          </div>
+          <div class="api-ep" onclick="openPanel('api')" onmouseenter="showTip(event,'Bidirectionele editor stream')" onmouseleave="hideTip()">
+            <div class="method">WS /session</div><div class="desc">editor stream</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="two-col reveal">
+        <div class="node" id="n-parser" data-phase="1" data-color="#3fb950" style="border-color:#3fb95055;" onclick="openPanel('parser')">
+          <div class="node-title" style="color:#3fb950;">core/parser.rs <span class="badge" style="background:#3fb95022;color:#3fb950;border:1px solid #3fb95044;">F1</span></div>
+          <div class="node-item"><div class="node-dot" style="background:#3fb950;"></div><span class="node-text">streaming JSON parse</span></div>
+          <div class="node-item"><div class="node-dot" style="background:#3fb950;"></div><span class="node-text">sonic-rs SIMD (3–5×)</span></div>
+          <div class="node-item"><div class="node-dot" style="background:#3fb950;"></div><span class="node-text">byte-offset index</span></div>
+          <div class="node-item"><div class="node-dot" style="background:#3fb950;"></div><span class="node-text">nooit volledig in RAM</span></div>
+        </div>
+        <div class="node" id="n-ecs" data-phase="1" data-color="#3fb950" style="border-color:#3fb95055;" onclick="openPanel('ecs')">
+          <div class="node-title" style="color:#3fb950;">core/ecs.rs <span class="badge" style="background:#3fb95022;color:#3fb950;border:1px solid #3fb95044;">F1</span></div>
+          <div class="node-item"><div class="node-dot" style="background:#3fb950;"></div><span class="node-text">Entity Component System</span></div>
+          <div class="node-item"><div class="node-dot" style="background:#3fb950;"></div><span class="node-text">struct-of-arrays layout</span></div>
+          <div class="node-item"><div class="node-dot" style="background:#3fb950;"></div><span class="node-text">hecs crate</span></div>
+          <div class="node-item"><div class="node-dot" style="background:#3fb950;"></div><span class="node-text">inheritance resolver</span></div>
+        </div>
+        <div class="node" id="n-query" data-phase="1" data-color="#3fb950" style="border-color:#3fb95055;" onclick="openPanel('query')">
+          <div class="node-title" style="color:#3fb950;">query/engine.rs <span class="badge" style="background:#3fb95022;color:#3fb950;border:1px solid #3fb95044;">F1</span></div>
+          <div class="node-item"><div class="node-dot" style="background:#3fb950;"></div><span class="node-text">filter op type / GUID</span></div>
+          <div class="node-item"><div class="node-dot" style="background:#3fb950;"></div><span class="node-text">rayon parallelle iteratie</span></div>
+          <div class="node-item"><div class="node-dot" style="background:#3fb950;"></div><span class="node-text">aggregate properties</span></div>
+        </div>
+        <div class="node" id="n-schema" data-phase="1" data-color="#3fb950" style="border-color:#3fb95055;" onclick="openPanel('schema')">
+          <div class="node-title" style="color:#3fb950;">core/schema.rs <span class="badge" style="background:#3fb95022;color:#3fb950;border:1px solid #3fb95044;">F1</span></div>
+          <div class="node-item"><div class="node-dot" style="background:#3fb950;"></div><span class="node-text">jsonschema validatie</span></div>
+          <div class="node-item"><div class="node-dot" style="background:#3fb950;"></div><span class="node-text">ifcx.dev live schema</span></div>
+          <div class="node-item"><div class="node-dot" style="background:#3fb950;"></div><span class="node-text">onbekende components ok</span></div>
+        </div>
+      </div>
+
+      <!-- PERFORMANCE -->
+      <div class="sec-head reveal" style="margin-top:4px;">
+        <div class="sec-num" style="background:#bc8cff22;border:1px solid #bc8cff;color:#bc8cff;">⚡</div>
+        <div class="sec-label" style="color:#bc8cff;">Performance stack — 500MB+ baseline</div>
+        <div class="sec-line" style="background:#bc8cff22;"></div>
+      </div>
+
+      <div class="perf-wrap reveal">
+        <div class="perf-grid">
+          <div class="perf-item" onclick="openPanel('perf-simd')">
+            <div class="perf-prob">500MB JSON parse</div>
+            <div class="perf-sol">sonic-rs (SIMD)</div>
+            <div class="perf-bar-wrap"><div class="perf-bar" data-w="90" style="background:#bc8cff;"></div></div>
+            <div class="perf-gain">3–5× sneller vs serde_json</div>
+          </div>
+          <div class="perf-item" onclick="openPanel('perf-mmap')">
+            <div class="perf-prob">Memory druk</div>
+            <div class="perf-sol">memmap2 (mmap IO)</div>
+            <div class="perf-bar-wrap"><div class="perf-bar" data-w="95" style="background:#bc8cff;"></div></div>
+            <div class="perf-gain">OS paginated · geen heap</div>
+          </div>
+          <div class="perf-item" onclick="openPanel('perf-rayon')">
+            <div class="perf-prob">Single-threaded parse</div>
+            <div class="perf-sol">rayon threadpool</div>
+            <div class="perf-bar-wrap"><div class="perf-bar" data-w="80" style="background:#bc8cff;"></div></div>
+            <div class="perf-gain">N-core parallellisatie</div>
+          </div>
+          <div class="perf-item" onclick="openPanel('perf-rkyv')">
+            <div class="perf-prob">Herhaald openen</div>
+            <div class="perf-sol">rkyv binary cache</div>
+            <div class="perf-bar-wrap"><div class="perf-bar" data-w="98" style="background:#bc8cff;"></div></div>
+            <div class="perf-gain">zero-copy · &lt;1 sec reopen</div>
+          </div>
+          <div class="perf-item" onclick="openPanel('perf-bvh')">
+            <div class="perf-prob">Spatial queries</div>
+            <div class="perf-sol">BVH · bvh-arena</div>
+            <div class="perf-bar-wrap"><div class="perf-bar" data-w="85" style="background:#bc8cff;"></div></div>
+            <div class="perf-gain">viewport culling O(log n)</div>
+          </div>
+          <div class="perf-item" onclick="openPanel('perf-gpu')">
+            <div class="perf-prob">GPU bottleneck</div>
+            <div class="perf-sol">wgpu GPU instancing</div>
+            <div class="perf-bar-wrap"><div class="perf-bar" data-w="75" style="background:#bc8cff;"></div></div>
+            <div class="perf-gain">1 draw call per type</div>
+          </div>
+          <div class="perf-item" onclick="openPanel('perf-ecs')">
+            <div class="perf-prob">ECS cache misses</div>
+            <div class="perf-sol">struct-of-arrays</div>
+            <div class="perf-bar-wrap"><div class="perf-bar" data-w="70" style="background:#bc8cff;"></div></div>
+            <div class="perf-gain">cache-line friendly</div>
+          </div>
+          <div class="perf-item" onclick="openPanel('perf-lod')">
+            <div class="perf-prob">Geometry overhead</div>
+            <div class="perf-sol">LOD 3 niveaus</div>
+            <div class="perf-bar-wrap"><div class="perf-bar" data-w="82" style="background:#bc8cff;"></div></div>
+            <div class="perf-gain">camera-distance driven</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- LAZY PIPELINE -->
+      <div class="sec-head reveal" style="margin-top:4px;">
+        <div class="sec-num" style="background:#e8a02022;border:1px solid #e8a020;color:#e8a020;">↓</div>
+        <div class="sec-label" style="color:#e8a020;">Lazy loading — index first, data on demand</div>
+        <div class="sec-line" style="background:#e8a02022;"></div>
+      </div>
+
+      <div class="lazy-wrap reveal">
+        <div style="position:relative;">
+          <div class="lazy-pipe">
+            <div class="lazy-step" onclick="openPanel('lazy-file')" onmouseenter="activateStep(this)" onmouseleave="deactivateStep(this)">
+              <div class="ls-icon">📄</div>
+              <div class="ls-title">1 · File</div>
+              <div class="ls-desc">mmap · niet in RAM</div>
+            </div>
+            <div class="lazy-step" onclick="openPanel('lazy-index')" onmouseenter="activateStep(this)" onmouseleave="deactivateStep(this)">
+              <div class="ls-icon">🗂</div>
+              <div class="ls-title">2 · Index</div>
+              <div class="ls-desc">GUID + byte offset · BVH spatial</div>
+            </div>
+            <div class="lazy-step" onclick="openPanel('lazy-vp')" onmouseenter="activateStep(this)" onmouseleave="deactivateStep(this)">
+              <div class="ls-icon">🎯</div>
+              <div class="ls-title">3 · Viewport</div>
+              <div class="ls-desc">frustum cull · visible only</div>
+            </div>
+            <div class="lazy-step" onclick="openPanel('lazy-geo')" onmouseenter="activateStep(this)" onmouseleave="deactivateStep(this)">
+              <div class="ls-icon">📐</div>
+              <div class="ls-title">4 · Geometry</div>
+              <div class="ls-desc">LOD per afstand · on demand</div>
+            </div>
+            <div class="lazy-step" onclick="openPanel('lazy-props')" onmouseenter="activateStep(this)" onmouseleave="deactivateStep(this)">
+              <div class="ls-icon">🏷</div>
+              <div class="ls-title">5 · Properties</div>
+              <div class="ls-desc">alleen bij selectie</div>
+            </div>
+          </div>
+          <div class="lazy-flow" style="top:calc(50% - 1px);">
+            <div class="lazy-flow-dot" style="animation-delay:0s;opacity:1;"></div>
+            <div class="lazy-flow-dot" style="animation-delay:.8s;opacity:1;"></div>
+            <div class="lazy-flow-dot" style="animation-delay:1.6s;opacity:1;"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- GEOMETRY LAYER -->
+      <div class="sec-head reveal" style="margin-top:4px;">
+        <div class="sec-num" style="background:#e8a02022;border:1px solid #e8a020;color:#e8a020;">2</div>
+        <div class="sec-label" style="color:#e8a020;">Geometry layer — Fase 2</div>
+        <div class="sec-line" style="background:#e8a02022;"></div>
+      </div>
+
+      <div class="two-col reveal">
+        <div class="node" id="n-tri" data-phase="2" data-color="#e8a020" style="border-color:#e8a02055;" onclick="openPanel('triangulate')">
+          <div class="node-title" style="color:#e8a020;">geometry/triangulate.rs <span class="badge" style="background:#e8a02022;color:#e8a020;border:1px solid #e8a02044;">F2</span></div>
+          <div class="node-item"><div class="node-dot" style="background:#e8a020;"></div><span class="node-text">mesh uit IFCX geometry</span></div>
+          <div class="node-item"><div class="node-dot" style="background:#e8a020;"></div><span class="node-text">ifc-lite ref. (MIT)</span></div>
+          <div class="node-item"><div class="node-dot" style="background:#e8a020;"></div><span class="node-text">glTF / draco export</span></div>
+        </div>
+        <div class="node" id="n-lod" data-phase="2" data-color="#e8a020" style="border-color:#e8a02055;" onclick="openPanel('lod')">
+          <div class="node-title" style="color:#e8a020;">geometry/lod.rs <span class="badge" style="background:#e8a02022;color:#e8a020;border:1px solid #e8a02044;">F2</span></div>
+          <div class="node-item"><div class="node-dot" style="background:#e8a020;"></div><span class="node-text">LOD 0: bounding box</span></div>
+          <div class="node-item"><div class="node-dot" style="background:#e8a020;"></div><span class="node-text">LOD 1: vereenvoudigd</span></div>
+          <div class="node-item"><div class="node-dot" style="background:#e8a020;"></div><span class="node-text">LOD 2: volledig mesh</span></div>
+        </div>
+      </div>
+
+      <!-- EDITOR LAYER -->
+      <div class="sec-head reveal" style="margin-top:4px;">
+        <div class="sec-num" style="background:#58a6ff22;border:1px solid #58a6ff;color:#58a6ff;">3</div>
+        <div class="sec-label" style="color:#58a6ff;">Editor + WASM — Fase 3</div>
+        <div class="sec-line" style="background:#58a6ff22;"></div>
+      </div>
+
+      <div class="two-col reveal">
+        <div class="node" id="n-delta" data-phase="3" data-color="#58a6ff" style="border-color:#58a6ff55;" onclick="openPanel('delta')">
+          <div class="node-title" style="color:#58a6ff;">layers/delta.rs <span class="badge" style="background:#58a6ff22;color:#58a6ff;border:1px solid #58a6ff44;">F3</span></div>
+          <div class="node-item"><div class="node-dot" style="background:#58a6ff;"></div><span class="node-text">non-destructive edits</span></div>
+          <div class="node-item"><div class="node-dot" style="background:#58a6ff;"></div><span class="node-text">base + delta IFCX</span></div>
+          <div class="node-item"><div class="node-dot" style="background:#58a6ff;"></div><span class="node-text">IFC5 native concept</span></div>
+        </div>
+        <div class="node" id="n-wasm" data-phase="3" data-color="#58a6ff" style="border-color:#58a6ff55;" onclick="openPanel('wasm')">
+          <div class="node-title" style="color:#58a6ff;">wasm/bindings.rs <span class="badge" style="background:#58a6ff22;color:#58a6ff;border:1px solid #58a6ff44;">F3</span></div>
+          <div class="node-item"><div class="node-dot" style="background:#58a6ff;"></div><span class="node-text">wasm-bindgen exports</span></div>
+          <div class="node-item"><div class="node-dot" style="background:#58a6ff;"></div><span class="node-text">Tauri commands bridge</span></div>
+          <div class="node-item"><div class="node-dot" style="background:#58a6ff;"></div><span class="node-text">WebGPU / wgpu</span></div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ╔════════════════════╗ -->
+    <!-- ║ RIGHT · Data       ║ -->
+    <!-- ╚════════════════════╝ -->
+    <div>
+      <div class="sec-head">
+        <div class="sec-num" style="background:#3fb95022;border:1px solid #3fb950;color:#3fb950;">↑</div>
+        <div class="sec-label" style="color:#3fb950;">Data bronnen</div>
+        <div class="sec-line" style="background:#3fb95022;"></div>
+      </div>
+
+      <div class="node reveal" id="n-model" data-phase="1" data-color="#3fb950" style="border-color:#3fb95055;" onclick="openPanel('model')" onmouseenter="showTip(event,'Read-only base layer · buildingSMART schema · 500MB+ OK')" onmouseleave="hideTip()">
+        <div class="node-title" style="color:#3fb950;">
+          model.ifcx
+          <span class="badge" style="background:#3fb95022;color:#3fb950;border:1px solid #3fb95044;">base layer</span>
+        </div>
+        <div class="node-item"><div class="node-dot" style="background:#3fb950;"></div><span class="node-text">read-only origineel</span></div>
+        <div class="node-item"><div class="node-dot" style="background:#3fb950;"></div><span class="node-text">buildingSMART schema</span></div>
+        <div class="node-item"><div class="node-dot" style="background:#3fb950;"></div><span class="node-text">500MB+ supported</span></div>
+      </div>
+
+      <div class="node reveal" id="n-edit" data-phase="3" data-color="#e8a020" style="border-color:#e8a02055;" onclick="openPanel('edit')" onmouseenter="showTip(event,'Delta layer · alleen diff · non-destructive · IFC5 native')" onmouseleave="hideTip()">
+        <div class="node-title" style="color:#e8a020;">
+          edit_session.ifcx
+          <span class="badge" style="background:#e8a02022;color:#e8a020;border:1px solid #e8a02044;">delta layer</span>
+        </div>
+        <div class="node-item"><div class="node-dot" style="background:#e8a020;"></div><span class="node-text">alleen diff wegschrijven</span></div>
+        <div class="node-item"><div class="node-dot" style="background:#e8a020;"></div><span class="node-text">non-destructive</span></div>
+        <div class="node-item"><div class="node-dot" style="background:#e8a020;"></div><span class="node-text">IFC5 native</span></div>
+      </div>
+
+      <div class="node reveal" id="n-revit" data-phase="1" data-color="#8b949e" style="border-color:#8b949e55;" onclick="openPanel('revit')" onmouseenter="showTip(event,'IFC4 export → IFCX bridge · toekomstig native IFC5')" onmouseleave="hideTip()">
+        <div class="node-title" style="color:#8b949e;">
+          Revit / Authoring
+          <span class="badge" style="background:#8b949e22;color:#8b949e;border:1px solid #8b949e44;">export</span>
+        </div>
+        <div class="node-item"><div class="node-dot" style="background:#8b949e;"></div><span class="node-text">IFC4 → IFCX bridge</span></div>
+        <div class="node-item"><div class="node-dot" style="background:#8b949e;"></div><span class="node-text">IfcPatch / IFC5 tools</span></div>
+        <div class="node-item"><div class="node-dot" style="background:#8b949e;"></div><span class="node-text">toekomstig: native</span></div>
+      </div>
+
+      <!-- Layer compositor -->
+      <div class="layer-comp reveal" style="margin-bottom:8px;">
+        <div style="font-size:8px;color:#484f58;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px;">Runtime Compositie</div>
+        <div class="layer-item" style="background:#3fb95011;border:1px solid #3fb95033;">
+          <div class="layer-sq" style="background:#3fb950;"></div>
+          <span class="layer-lbl" style="color:#3fb950;">model.ifcx</span>
+          <span class="layer-desc">base · read-only</span>
+        </div>
+        <div class="layer-conn"><div></div></div>
+        <div class="layer-item" style="background:#e8a02011;border:1px solid #e8a02033;">
+          <div class="layer-sq" style="background:#e8a020;"></div>
+          <span class="layer-lbl" style="color:#e8a020;">edit.ifcx</span>
+          <span class="layer-desc">delta · diff only</span>
+        </div>
+        <div class="layer-conn"><div></div></div>
+        <div class="layer-item" style="background:#58a6ff11;border:1px solid #58a6ff33;">
+          <div class="layer-sq" style="background:#58a6ff;"></div>
+          <span class="layer-lbl" style="color:#58a6ff;">merged view</span>
+          <span class="layer-desc">runtime · lazy</span>
+        </div>
+      </div>
+
+      <!-- Cache -->
+      <div class="node reveal" id="n-cache" data-phase="1" data-color="#3fb950" style="border-color:#3fb95055;" onclick="openPanel('cache')">
+        <div class="node-title" style="color:#3fb950;">rkyv binary cache</div>
+        <div class="node-item"><div class="node-dot" style="background:#3fb950;"></div><span class="node-text">model.ifcx.cache</span></div>
+        <div class="node-item"><div class="node-dot" style="background:#3fb950;"></div><span class="node-text">zero-copy mmap</span></div>
+        <div class="node-item"><div class="node-dot" style="background:#3fb950;"></div><span class="node-text">spatial index ingebakken</span></div>
+        <div class="node-item"><div class="node-dot" style="background:#3fb950;"></div><span class="node-text">invalidatie op file-hash</span></div>
+      </div>
+
+      <!-- Tauri detail -->
+      <div class="node reveal" id="n-tauri" data-phase="3" data-color="#e8a020" style="border-color:#e8a02055;margin-top:0;" onclick="openPanel('dist-tauri')">
+        <div class="node-title" style="color:#e8a020;">Tauri v2 desktop</div>
+        <div class="node-item"><div class="node-dot" style="background:#e8a020;"></div><span class="node-text">zelfde HTML/JS als browser</span></div>
+        <div class="node-item"><div class="node-dot" style="background:#e8a020;"></div><span class="node-text">Rust core via commands</span></div>
+        <div class="node-item"><div class="node-dot" style="background:#e8a020;"></div><span class="node-text">geen Axum nodig offline</span></div>
+        <div class="node-item"><div class="node-dot" style="background:#e8a020;"></div><span class="node-text">auto-update via GitHub</span></div>
+      </div>
+    </div>
+  </div><!-- /arch-grid -->
+
+</main>
+
+<!-- ═══ FOOTER ════════════════════════════════════════════════════════ -->
+<footer>
+  <span class="ft-badge" style="background:#e05a2b22;color:#e05a2b;border:1px solid #e05a2b44;">sonic-rs</span>
+  <span class="ft-badge" style="background:#e05a2b22;color:#e05a2b;border:1px solid #e05a2b44;">memmap2</span>
+  <span class="ft-badge" style="background:#e05a2b22;color:#e05a2b;border:1px solid #e05a2b44;">rayon</span>
+  <span class="ft-badge" style="background:#e05a2b22;color:#e05a2b;border:1px solid #e05a2b44;">rkyv</span>
+  <span class="ft-badge" style="background:#e05a2b22;color:#e05a2b;border:1px solid #e05a2b44;">hecs</span>
+  <span class="ft-badge" style="background:#e05a2b22;color:#e05a2b;border:1px solid #e05a2b44;">axum 0.7</span>
+  <span class="ft-badge" style="background:#e05a2b22;color:#e05a2b;border:1px solid #e05a2b44;">bvh-arena</span>
+  <span class="ft-badge" style="background:#e8a02022;color:#e8a020;border:1px solid #e8a02044;">tauri v2</span>
+  <span class="ft-badge" style="background:#e8a02022;color:#e8a020;border:1px solid #e8a02044;">wgpu</span>
+  <span class="ft-badge" style="background:#58a6ff22;color:#58a6ff;border:1px solid #58a6ff44;">wasm-bindgen</span>
+  <span class="ft-badge" style="background:#3fb95022;color:#3fb950;border:1px solid #3fb95044;">pyo3</span>
+  <span class="ft-badge" style="background:#bc8cff22;color:#bc8cff;border:1px solid #bc8cff44;">ifc-lite (MIT)</span>
+  <span class="ft-copy">LGPL / MIT · Open AEC Foundation · ifcx-rs v0.1</span>
+</footer>
+
+<!-- ═══ DETAIL PANEL ═════════════════════════════════════════════════ -->
+<div id="detail-panel">
+  <div class="panel-header">
+    <div class="panel-sup" id="panel-sup">Module</div>
+    <div class="panel-title" id="panel-title">—</div>
+    <div class="panel-close" onclick="closePanel()">✕</div>
+  </div>
+  <div class="panel-body" id="panel-body"></div>
+</div>
+
+<!-- ═══ TOOLTIP ══════════════════════════════════════════════════════ -->
+<div id="tooltip"></div>
+
+<script>
+// ── PANEL DATA ────────────────────────────────────────────────────────
+const panels = {
+  parser: {
+    sup: 'core/ · Fase 1',
+    title: 'core/parser.rs',
+    sections: [
+      { title: 'Waarom streaming?', items: ['500MB JSON kan niet volledig in RAM', 'Streaming parse = verwerk node voor node', 'byte-offset index: sla op waar elk node staat', 'Laad payload pas als je hem nodig hebt'] },
+      { title: 'Crate keuze', crates: [['sonic-rs','SIMD JSON, 3-5× sneller dan serde_json'],['serde','basis trait system voor deserialisatie'],['memmap2','memory-mapped file IO via OS']] },
+      { title: 'Kritische beslissing', note: 'sonic-rs kies je nu, niet later. De parser is het fundament van alles — achteraf migreren van serde_json naar sonic-rs is een grote refactor door de hele codebase.' }
+    ]
+  },
+  ecs: {
+    sup: 'core/ · Fase 1',
+    title: 'core/ecs.rs',
+    sections: [
+      { title: 'Wat is ECS?', items: ['Entity = een GUID, niets meer', 'Component = een datablok (geometrie, material, property)', 'System = logica die op components opereert', 'IFC5 is natively ECS — geen impedance mismatch'] },
+      { title: 'Layout strategie', items: ['struct-of-arrays i.p.v. array-of-structs', 'Alle posities achter elkaar in memory', 'CPU cache-line friendly → drastisch minder cache misses', 'Rayon kan gemakkelijk parallel over arrays itereren'] },
+      { title: 'Crate keuze', crates: [['hecs','lichtgewicht ECS, geen game-engine overhead'],['bevy_ecs','alternatief als meer features nodig zijn']] }
+    ]
+  },
+  query: {
+    sup: 'query/ · Fase 1',
+    title: 'query/engine.rs',
+    sections: [
+      { title: 'Query types', items: ['by_type("IfcWall") → alle wanden', 'by_guid("3Hf...") → specifieke entiteit', 'by_component("ThermalProperties") → filter', 'spatial_query(viewport) → BVH traversal', 'aggregate(property) → som/gem/max over set'] },
+      { title: 'IFCX als query taal', items: ['Queries worden zelf in IFCX formaat gespecificeerd', 'Response is ook altijd geldig IFCX', 'Consumers hoeven het interne model niet te kennen'] },
+      { title: 'Crate keuze', crates: [['rayon','data-parallelle iteratie over ECS'], ['bvh-arena','BVH tree voor spatial queries']] }
+    ]
+  },
+  schema: {
+    sup: 'core/ · Fase 1',
+    title: 'core/schema.rs',
+    sections: [
+      { title: 'Schema strategie', items: ['IFC5 schema evolueert nog snel', 'Validatie tegen ifcx.dev live JSON schema', 'Onbekende components = warning, geen error', 'Serde flatten voor forward compatibility'] },
+      { title: 'Evolutie-tolerant design', items: ['#[serde(flatten)] op component velden', 'Value type voor onbekende data bewaren', 'Schema version tracking per model', 'Soft failures op nieuwe onbekende fields'] },
+      { title: 'Crate keuze', crates: [['jsonschema','validatie tegen JSON Schema spec'],['semver','schema versie tracking']] }
+    ]
+  },
+  cache: {
+    sup: 'cache/ · Fase 1',
+    title: 'rkyv binary cache',
+    sections: [
+      { title: 'Waarom cache cruciaal is', items: ['Eerste parse 500MB IFCX: 10-30 seconden', 'rkyv binary cache: dezelfde data in <1 sec', 'Zero-copy: OS mapt cache direct in adresruimte', 'Spatial index is mee-gecached — geen rebuild'] },
+      { title: 'Cache lifecycle', items: ['Hash van model.ifcx bepaalt cache geldigheid', 'Cache naast model opslaan (.ifcx.cache)', 'Bij model wijziging: auto-invalidatie', 'Cache is platform-specifiek (niet porteerbaar)'] },
+      { title: 'Crate keuze', crates: [['rkyv','zero-copy serialisatie, extreem snel'],['xxhash-rust','snelle file hash voor invalidatie']] }
+    ]
+  },
+  warmte: {
+    sup: 'Consumer · Rust API',
+    title: 'Warmteverlies API',
+    sections: [
+      { title: 'Integratie', items: ['Roept ifcx-rs aan via cdylib DLL', 'Stuurt IFCX query voor specifieke elements', 'Ontvangt IFCX response met U-waarden', 'Volledig offline — geen netwerk nodig'] },
+      { title: 'Typische query flow', items: ['Query: alle IfcWall nodes met ThermalProperties', 'Response: IFCX met U-waarde per element', 'Berekening: warmteverlies = U × A × ΔT', 'Output: resultaten als IFCX of eigen format'] }
+    ]
+  },
+  editor: {
+    sup: 'Consumer · Fase 3',
+    title: '3D Editor',
+    sections: [
+      { title: 'Distributiemodi', items: ['Browser: WASM build van ifcx-rs core', 'Desktop: Tauri v2 met Rust core embedded', 'Zelfde HTML/JS frontend voor beide', 'Geen code duplicatie'] },
+      { title: 'Rendering stack', items: ['wgpu als WebGPU abstractielaag', 'GPU instancing: 1 draw call per element type', 'LOD driven door camera afstand', 'Frustum culling via BVH spatial index'] },
+      { title: 'Non-destructive editing', items: ['Wijzigingen schrijven naar edit_session.ifcx', 'Base model blijft onaangeroerd', 'Merge op runtime: base + delta = view', 'IFC5 native concept — gratis meegekregen'] }
+    ]
+  },
+  'dist-dll': {
+    sup: 'Distribution target',
+    title: 'cdylib · DLL / .so',
+    sections: [
+      { title: 'Wat is cdylib?', items: ['Rust compile target voor C-compatible libraries', 'ifcx.dll op Windows, libifcx.so op Linux', 'C ABI: elke taal kan ermee integreren', 'Geen runtime dependency — zelfstandig'] },
+      { title: 'Integratie in andere tools', items: ['Warmteverlies API laadt de DLL direct', 'Constructief tool via FFI interface', 'Python via PyO3 (.pyd = speciale DLL)', 'Toekomstig: Revit plugin via C# P/Invoke'] },
+      { title: 'Build commando', note: 'cargo build --release --target x86_64-pc-windows-msvc\nResultaat: target/release/ifcx.dll (~2-8 MB stripped)' }
+    ]
+  },
+  'dist-tauri': {
+    sup: 'Distribution target',
+    title: 'Tauri v2 desktop app',
+    sections: [
+      { title: 'Waarom Tauri boven Electron?', items: ['Rust backend i.p.v. Node.js — native performance', 'WebView i.p.v. Chromium bundelen → <15MB vs 150MB+', 'Dezelfde ifcx-rs crate, geen duplicatie', 'Tauri commands = directe Rust function calls'] },
+      { title: 'Architectuur', items: ['Frontend: HTML/CSS/JS (zelfde als browser build)', 'Backend: ifcx-rs als Tauri plugin', 'IPC: Tauri commands i.p.v. HTTP calls', 'File access: Tauri FS API voor lokale IFCX files'] },
+      { title: 'Cross-platform', items: ['Windows: .msi installer', 'Linux: .deb / .AppImage', 'macOS: .dmg (optioneel)', 'Auto-update via GitHub Releases'] }
+    ]
+  },
+  'dist-server': {
+    sup: 'Distribution target',
+    title: 'bin · Axum HTTP server',
+    sections: [
+      { title: 'Use cases', items: ['Docker container op Synology NAS', 'Gedeelde service voor meerdere tools', 'Team collaboration via LAN', 'CI/CD pipeline integratie'] },
+      { title: 'API design', items: ['REST endpoints + WebSocket voor editor', 'IFCX in, IFCX out — altijd', 'Streaming responses voor grote modellen', 'Server-Sent Events voor progress updates'] },
+      { title: 'Crate keuze', crates: [['axum','Tokio-based HTTP framework'],['tokio','async runtime'],['tower','middleware stack']] }
+    ]
+  },
+  'dist-wasm': {
+    sup: 'Distribution target',
+    title: 'WASM · browser',
+    sections: [
+      { title: 'Wat is WASM?', items: ['WebAssembly: binary formaat voor browsers', 'Rust compileert natively naar WASM', 'wasm-bindgen genereert JS glue code', 'Sneller dan JavaScript voor compute-heavy werk'] },
+      { title: 'Beperkingen', items: ['Geen directe file system access', 'Memory begrensd (historisch 4GB, modern meer)', 'Threading via Web Workers (complexer)', 'Geen native OS UI'] },
+      { title: 'PWA mogelijkheden', items: ['Service Worker cacht WASM binary', 'Offline werking mogelijk', 'Installeerbaar als desktop shortcut', 'IndexedDB voor model cache in browser'] }
+    ]
+  },
+  triangulate: {
+    sup: 'geometry/ · Fase 2',
+    title: 'geometry/triangulate.rs',
+    sections: [
+      { title: 'Scope', items: ['IFCX geometry types → triangle meshes', 'IFC5 gebruikt vereenvoudigde geometry vs IFC4', 'Minder complex dan IFC4 B-rep boolean operaties', 'ifc-lite (MIT) als referentie implementatie'] },
+      { title: 'Output', items: ['glTF 2.0 voor interoperabiliteit', 'Draco compressie voor grote meshes', 'Per-LOD mesh variants', 'GPU-ready buffer layout'] }
+    ]
+  },
+  lod: {
+    sup: 'geometry/ · Fase 2',
+    title: 'geometry/lod.rs',
+    sections: [
+      { title: 'LOD strategie', items: ['LOD 0: alleen bounding box (AABB)', 'LOD 1: vereenvoudigd mesh (<500 triangles)', 'LOD 2: volledig mesh (onbeperkt)', 'Keuze op basis van camera-to-object afstand'] },
+      { title: 'Performance impact', items: ['Een 500MB model heeft duizenden objecten', 'Ver weg: toon alleen bounding boxes', 'GPU hoeft dan 99% van geometrie niet te verwerken', 'Smooth LOD transitions via alpha blending'] }
+    ]
+  },
+  delta: {
+    sup: 'layers/ · Fase 3',
+    title: 'layers/delta.rs',
+    sections: [
+      { title: 'Non-destructive editing', items: ['Base model.ifcx: read-only, nooit aanpassen', 'edit_session.ifcx: alleen de diff opslaan', 'Merge op runtime: transparant voor consumers', 'IFC5 native concept — ingebakken in de standaard'] },
+      { title: 'Delta formaat', items: ['Geldig IFCX bestand (klein)', 'Bevat alleen gewijzigde nodes/components', 'GUIDs refereren terug naar base model', 'Meerdere delta layers stapelbaar'] }
+    ]
+  },
+  api: {
+    sup: 'api/ · Axum',
+    title: 'HTTP API endpoints',
+    sections: [
+      { title: 'Design principes', items: ['IFCX in, IFCX uit — altijd, geen eigen dialect', 'Lazy: GET /nodes geeft index, niet payloads', 'Streaming: grote responses via chunked transfer', 'Stateless: elke request bevat eigen context'] },
+      { title: 'Performance endpoints', items: ['GET /nodes?type=IfcWall — index only, snel', 'GET /nodes/:guid — payload on demand', 'GET /spatial?viewport=... — BVH query', 'GET /cache/status — monitoring'] }
+    ]
+  },
+  'perf-simd': {
+    sup: 'Performance · JSON parsing',
+    title: 'sonic-rs · SIMD JSON',
+    sections: [
+      { title: 'Waarom SIMD?', items: ['SIMD = Single Instruction, Multiple Data', 'Moderne CPUs verwerken 16-32 bytes per clock cycle', 'sonic-rs gebruikt AVX2 / SSE4 instructies', 'Resultaat: 3-5× sneller dan standaard serde_json'] },
+      { title: 'Trade-offs', items: ['sonic-rs vereist unsafe Rust (intern)', 'API is compatibel met serde_json', 'Fallback voor CPU zonder AVX2 support', 'Kies nu — later migreren is duur'] }
+    ]
+  },
+  'perf-rkyv': {
+    sup: 'Performance · Cache',
+    title: 'rkyv · zero-copy cache',
+    sections: [
+      { title: 'Hoe werkt zero-copy?', items: ['rkyv serialiseert data in een binair formaat', 'Formaat is zo ontworpen dat het direct in memory bruikbaar is', 'OS mapt het cache bestand via mmap', 'Geen deserialisatie stap nodig — directe pointer access'] },
+      { title: 'Impact', items: ['Eerste parse 500MB: 10-30 seconden', 'Tweede open via cache: <1 seconde', 'Cache bevat ook de BVH spatial index', 'Nettowinst: iteratief werken wordt snel'] }
+    ]
+  },
+  model: {
+    sup: 'Data bron · Base layer',
+    title: 'model.ifcx',
+    sections: [
+      { title: 'Karakteristieken', items: ['Geldig IFCX JSON bestand', '500MB+ is de baseline, niet de uitzondering', 'buildingSMART IFC5 alpha schema', 'ECS structuur: nodes + components'] },
+      { title: 'Hoe het geladen wordt', items: ['mmap: OS pagineert het bestand', 'streaming parser bouwt byte-offset index', 'Nodes worden lazy geladen op request', 'Na eerste parse: rkyv cache wegschrijven'] }
+    ]
+  }
+};
+
+// ── PANEL OPEN/CLOSE ──────────────────────────────────────────────────
+let currentNode = null;
+
+function openPanel(id) {
+  const data = panels[id];
+  if (!data) return;
+
+  document.getElementById('panel-sup').textContent = data.sup || '';
+  document.getElementById('panel-title').textContent = data.title;
+
+  let html = '';
+  (data.sections || []).forEach(sec => {
+    html += `<div class="panel-section">`;
+    html += `<div class="panel-section-title">${sec.title}</div>`;
+    if (sec.items) sec.items.forEach(i => { html += `<div class="panel-item">${i}</div>`; });
+    if (sec.crates) sec.crates.forEach(([name, why]) => {
+      html += `<div class="panel-crate"><span class="crate-name">${name}</span><span class="crate-why">${why}</span></div>`;
+    });
+    if (sec.note) html += `<div class="panel-note"><pre style="white-space:pre-wrap;font-family:inherit;">${sec.note}</pre></div>`;
+    html += `</div>`;
+  });
+
+  document.getElementById('panel-body').innerHTML = html;
+  document.getElementById('detail-panel').classList.add('open');
+  document.getElementById('main').classList.add('panel-open');
+
+  // highlight selected node
+  document.querySelectorAll('.node.selected').forEach(n => n.classList.remove('selected'));
+  const nodeEl = document.getElementById('n-' + id.replace('dist-','').replace('perf-','').replace('lazy-',''));
+  if (nodeEl) { nodeEl.classList.add('selected'); currentNode = nodeEl; }
+}
+
+function closePanel() {
+  document.getElementById('detail-panel').classList.remove('open');
+  document.getElementById('main').classList.remove('panel-open');
+  document.querySelectorAll('.node.selected').forEach(n => n.classList.remove('selected'));
+  currentNode = null;
+}
+
+// ── PHASE FILTER ──────────────────────────────────────────────────────
+let activePhase = 'all';
+function filterPhase(phase) {
+  activePhase = phase;
+  document.querySelectorAll('.pfbtn').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+
+  document.querySelectorAll('[data-phase]').forEach(n => {
+    if (phase === 'all') {
+      n.classList.remove('dimmed','highlighted');
+    } else {
+      const nodePhase = n.getAttribute('data-phase');
+      if (nodePhase === phase) { n.classList.remove('dimmed'); n.classList.add('highlighted'); }
+      else { n.classList.add('dimmed'); n.classList.remove('highlighted'); }
+    }
+  });
+}
+
+// ── DIST FILTER ───────────────────────────────────────────────────────
+let activeDist = null;
+function filterDist(dist) {
+  if (activeDist === dist) {
+    activeDist = null;
+    document.querySelectorAll('.dfbtn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.dist-node').forEach(n => n.classList.remove('active-dist'));
+    return;
+  }
+  activeDist = dist;
+  document.querySelectorAll('.dfbtn').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+  document.querySelectorAll('.dist-node').forEach(n => {
+    n.classList.toggle('active-dist', n.getAttribute('data-dist') === dist);
+  });
+}
+
+// ── TOOLTIP ───────────────────────────────────────────────────────────
+const tooltip = document.getElementById('tooltip');
+function showTip(e, text) {
+  tooltip.textContent = text;
+  tooltip.classList.add('show');
+  moveTip(e);
+}
+function moveTip(e) {
+  tooltip.style.left = (e.clientX + 12) + 'px';
+  tooltip.style.top  = (e.clientY - 8) + 'px';
+}
+function hideTip() { tooltip.classList.remove('show'); }
+document.addEventListener('mousemove', e => { if (tooltip.classList.contains('show')) moveTip(e); });
+
+// ── LAZY STEP HIGHLIGHT ───────────────────────────────────────────────
+function activateStep(el)   { el.classList.add('active-step'); }
+function deactivateStep(el) { el.classList.remove('active-step'); }
+
+// ── PERFORMANCE BARS ──────────────────────────────────────────────────
+function animateBars() {
+  document.querySelectorAll('.perf-bar').forEach(bar => {
+    const w = bar.getAttribute('data-w');
+    setTimeout(() => { bar.style.width = w + '%'; }, 300 + Math.random() * 400);
+  });
+}
+
+// ── REVEAL ON SCROLL ─────────────────────────────────────────────────
+const io = new IntersectionObserver(entries => {
+  entries.forEach((e, i) => {
+    if (e.isIntersecting) {
+      setTimeout(() => e.target.classList.add('visible'), i * 60);
+      io.unobserve(e.target);
+    }
+  });
+}, { threshold: 0.1 });
+
+document.querySelectorAll('.reveal').forEach((el, i) => {
+  el.style.transitionDelay = (i * 0.03) + 's';
+  io.observe(el);
+});
+
+// ── INIT ──────────────────────────────────────────────────────────────
+window.addEventListener('load', () => {
+  animateBars();
+});
+
+// Close panel on escape
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closePanel(); });
+</script>
+</body>
+</html>

@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ifcx-rs · System Architecture v2</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #0d1117;
+    color: #e6edf3;
+    font-family: 'Courier New', monospace;
+    padding: 28px 32px;
+  }
+
+  /* ── Typography ─────────────────────────────────── */
+  .sup  { font-size: 9px;  color: #6e7681; letter-spacing: 3px; text-transform: uppercase; margin-bottom: 5px; }
+  h1    { font-size: 20px; font-weight: 700; letter-spacing: -.5px; }
+  h1 em { color: #ce4a1f; font-style: normal; }
+  .sub  { font-size: 10px; color: #8b949e; margin-top: 4px; }
+
+  .badge {
+    display: inline-block;
+    font-size: 8px; font-family: 'Courier New', monospace;
+    padding: 1px 6px; border-radius: 2px;
+    letter-spacing: 1px; text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  /* ── Section titles ─────────────────────────────── */
+  .section-title {
+    display: flex; align-items: center; gap: 8px;
+    margin-bottom: 10px;
+  }
+  .section-title .num {
+    width: 20px; height: 20px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 9px; font-weight: 700; flex-shrink: 0;
+  }
+  .section-title .txt {
+    font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase;
+  }
+  .section-title .rule { flex: 1; height: 1px; }
+
+  /* ── Generic box ────────────────────────────────── */
+  .box {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    padding: 10px 12px;
+  }
+  .box-title {
+    font-size: 10px; font-weight: 700; letter-spacing: .3px;
+    margin-bottom: 7px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .item {
+    display: flex; align-items: center; gap: 6px;
+    margin-bottom: 3px;
+  }
+  .dot { width: 3px; height: 3px; border-radius: 50%; flex-shrink: 0; }
+  .item-text { font-size: 9px; color: #8b949e; }
+
+  /* ── Connector arrows ───────────────────────────── */
+  .arr-v {
+    display: flex; flex-direction: column; align-items: center;
+    margin: 3px 0;
+  }
+  .arr-v .shaft { width: 1px; height: 14px; }
+  .arr-v .shaft.dashed {
+    background: repeating-linear-gradient(
+      to bottom, #30363d 0, #30363d 3px, transparent 3px, transparent 7px
+    );
+  }
+  .arr-v .tip-down {
+    width: 0; height: 0;
+    border-left: 3px solid transparent;
+    border-right: 3px solid transparent;
+  }
+  .arr-v .lbl { font-size: 8px; color: #6e7681; letter-spacing: .5px; }
+
+  /* ── Main layout ────────────────────────────────── */
+  .root {
+    display: grid;
+    grid-template-columns: 200px 1fr 200px;
+    gap: 16px;
+    margin-top: 24px;
+  }
+
+  /* ── Distribution row (top) ─────────────────────── */
+  .dist-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  /* ── Kernel block ───────────────────────────────── */
+  .kernel {
+    border-radius: 8px;
+    padding: 14px;
+    border: 1px solid #ce4a1f66;
+    background: #ce4a1f0a;
+    margin-bottom: 10px;
+  }
+  .kernel-title {
+    font-size: 11px; font-weight: 700; color: #ce4a1f;
+    letter-spacing: .5px; margin-bottom: 10px;
+    display: flex; align-items: center; gap: 8px;
+  }
+
+  /* ── Performance block ──────────────────────────── */
+  .perf-block {
+    border-radius: 8px;
+    padding: 12px;
+    border: 1px solid #bc8cff44;
+    background: #bc8cff08;
+    margin-bottom: 10px;
+  }
+  .perf-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+  .perf-item {
+    background: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 4px;
+    padding: 6px 8px;
+  }
+  .perf-item .prob { font-size: 8px; color: #6e7681; margin-bottom: 2px; }
+  .perf-item .sol  { font-size: 9px; color: #bc8cff; margin-bottom: 2px; }
+  .perf-item .crt  { font-size: 8px; color: #8b949e; font-style: italic; }
+
+  /* ── Lazy loading pipeline ──────────────────────── */
+  .lazy-pipeline {
+    border-radius: 8px;
+    padding: 12px;
+    border: 1px solid #e8a02044;
+    background: #e8a02008;
+    margin-bottom: 10px;
+  }
+  .lazy-steps {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 0;
+    align-items: center;
+    margin-top: 8px;
+  }
+  .lazy-step {
+    background: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 4px;
+    padding: 6px 8px;
+    text-align: center;
+  }
+  .lazy-step .ls-icon { font-size: 14px; margin-bottom: 3px; }
+  .lazy-step .ls-title { font-size: 8px; color: #e8a020; margin-bottom: 2px; }
+  .lazy-step .ls-desc  { font-size: 7px; color: #6e7681; }
+  .lazy-arrow {
+    display: flex; justify-content: center; align-items: center;
+    color: #30363d; font-size: 12px;
+  }
+
+  /* ── Cache pipeline ─────────────────────────────── */
+  .cache-block {
+    background: #161b22;
+    border: 1px solid #3fb95044;
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin-bottom: 10px;
+  }
+  .cache-row {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr auto 1fr;
+    gap: 4px;
+    align-items: center;
+  }
+  .cache-node {
+    background: #0d1117;
+    border-radius: 4px;
+    padding: 5px 8px;
+    text-align: center;
+  }
+  .cache-node .cn-label { font-size: 8px; }
+  .cache-node .cn-desc  { font-size: 7px; color: #6e7681; margin-top: 1px; }
+  .cache-arrow { font-size: 10px; color: #30363d; text-align: center; }
+
+  /* ── Module grid (2-col) ────────────────────────── */
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-bottom: 8px; }
+  .three-col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+
+  /* ── API endpoint grid ──────────────────────────── */
+  .api-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px; }
+  .api-ep {
+    background: #0d1117; border: 1px solid #30363d;
+    border-radius: 4px; padding: 5px 7px;
+  }
+  .api-ep .ep  { font-size: 8px; color: #ce4a1f; margin-bottom: 1px; }
+  .api-ep .edesc { font-size: 7px; color: #6e7681; }
+
+  /* ── Layer compositor ───────────────────────────── */
+  .layer-comp {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin-top: 8px;
+  }
+  .layer-row-item {
+    display: flex; align-items: center; gap: 7px;
+    border-radius: 4px; padding: 4px 7px; margin-bottom: 2px;
+  }
+  .sq { width: 5px; height: 5px; border-radius: 1px; flex-shrink: 0; }
+
+  /* ── Footer ─────────────────────────────────────── */
+  .footer {
+    margin-top: 20px; padding-top: 14px;
+    border-top: 1px solid #30363d;
+    display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+  }
+  .footer .copy { font-size: 8px; color: #6e7681; margin-left: auto; }
+
+  /* ── Warning strip ──────────────────────────────── */
+  .warn {
+    background: #bc8cff11; border: 1px solid #bc8cff33;
+    border-radius: 4px; padding: 5px 10px;
+    font-size: 9px; color: #bc8cff;
+    letter-spacing: .3px; margin-bottom: 8px;
+  }
+  .warn strong { color: #bc8cff; }
+</style>
+</head>
+<body>
+
+<!-- ═══ HEADER ═══════════════════════════════════════════════════════ -->
+<div class="sup">Open AEC Foundation · Architecture Document v2</div>
+<h1><em>ifcx-rs</em> · System Architecture</h1>
+<div class="sub">IFC5/IFCX · Rust core · DLL/SO · Tauri desktop · HTTP API · WASM · 3D Editor · 500MB+ performance</div>
+
+<!-- ═══ ROOT GRID ═══════════════════════════════════════════════════ -->
+<div class="root">
+
+  <!-- ╔══════════════════════════════╗ -->
+  <!-- ║  LEFT — Consumers            ║ -->
+  <!-- ╚══════════════════════════════╝ -->
+  <div>
+    <div class="section-title">
+      <div class="num" style="background:#58a6ff22;border:1px solid #58a6ff;color:#58a6ff;">↓</div>
+      <div class="txt" style="color:#58a6ff;">Consumers</div>
+      <div class="rule" style="background:#58a6ff22;"></div>
+    </div>
+
+    <!-- Warmteverlies -->
+    <div class="box" style="border-color:#ce4a1f;margin-bottom:7px;">
+      <div class="box-title" style="color:#ce4a1f;">
+        Warmteverlies API
+        <span class="badge" style="background:#ce4a1f22;color:#ce4a1f;border:1px solid #ce4a1f44;">Rust</span>
+      </div>
+      <div class="item"><div class="dot" style="background:#ce4a1f;"></div><span class="item-text">U-waarden / transmissie</span></div>
+      <div class="item"><div class="dot" style="background:#ce4a1f;"></div><span class="item-text">IFCX query → resultaat</span></div>
+      <div class="item"><div class="dot" style="background:#ce4a1f;"></div><span class="item-text">DLL call (offline)</span></div>
+    </div>
+
+    <!-- Constructief -->
+    <div class="box" style="border-color:#58a6ff;margin-bottom:7px;">
+      <div class="box-title" style="color:#58a6ff;">
+        Constructief Tool
+        <span class="badge" style="background:#8b949e22;color:#8b949e;border:1px solid #8b949e44;">tbd</span>
+      </div>
+      <div class="item"><div class="dot" style="background:#58a6ff;"></div><span class="item-text">belasting uit model</span></div>
+      <div class="item"><div class="dot" style="background:#58a6ff;"></div><span class="item-text">element queries</span></div>
+      <div class="item"><div class="dot" style="background:#58a6ff;"></div><span class="item-text">DLL call (offline)</span></div>
+    </div>
+
+    <!-- Python bridge -->
+    <div class="box" style="border-color:#3fb950;margin-bottom:7px;">
+      <div class="box-title" style="color:#3fb950;">
+        Python / IfcOpenShell
+        <span class="badge" style="background:#3fb95022;color:#3fb950;border:1px solid #3fb95044;">PyO3</span>
+      </div>
+      <div class="item"><div class="dot" style="background:#3fb950;"></div><span class="item-text">bridge naar bestaande tools</span></div>
+      <div class="item"><div class="dot" style="background:#3fb950;"></div><span class="item-text">batch verwerking</span></div>
+      <div class="item"><div class="dot" style="background:#3fb950;"></div><span class="item-text">.pyd / .so bindings</span></div>
+    </div>
+
+    <!-- 3D Editor -->
+    <div class="box" style="border-color:#e8a020;margin-bottom:7px;">
+      <div class="box-title" style="color:#e8a020;">
+        3D Editor
+        <span class="badge" style="background:#e8a02022;color:#e8a020;border:1px solid #e8a02044;">Fase 3</span>
+      </div>
+      <div class="item"><div class="dot" style="background:#e8a020;"></div><span class="item-text">WebGPU / wgpu rendering</span></div>
+      <div class="item"><div class="dot" style="background:#e8a020;"></div><span class="item-text">non-destructive layers</span></div>
+      <div class="item"><div class="dot" style="background:#e8a020;"></div><span class="item-text">desktop + browser + Tauri</span></div>
+    </div>
+
+    <!-- Externe tools -->
+    <div class="box" style="border-color:#8b949e;">
+      <div class="box-title" style="color:#8b949e;">
+        Externe BIM tools
+        <span class="badge" style="background:#8b949e22;color:#8b949e;border:1px solid #8b949e44;">HTTP</span>
+      </div>
+      <div class="item"><div class="dot" style="background:#8b949e;"></div><span class="item-text">Revit / ArchiCAD export</span></div>
+      <div class="item"><div class="dot" style="background:#8b949e;"></div><span class="item-text">IFC4 → IFCX bridge</span></div>
+      <div class="item"><div class="dot" style="background:#8b949e;"></div><span class="item-text">REST JSON in/out</span></div>
+    </div>
+  </div>
+
+  <!-- ╔══════════════════════════════════════════════════════╗ -->
+  <!-- ║  CENTER — ifcx-rs core                               ║ -->
+  <!-- ╚══════════════════════════════════════════════════════╝ -->
+  <div>
+
+    <!-- PERFORMANCE WARNING -->
+    <div class="warn">
+      <strong>⚡ PERFORMANCE PRIO 1</strong> — baseline: 500MB+ IFCX files · streaming-first · zero-copy · SIMD JSON · lazy load
+    </div>
+
+    <!-- ── DISTRIBUTION LAYER ─────────────────────────── -->
+    <div class="section-title">
+      <div class="num" style="background:#e8a02022;border:1px solid #e8a020;color:#e8a020;">0</div>
+      <div class="txt" style="color:#e8a020;">Distribution targets — één codebase, drie builds</div>
+      <div class="rule" style="background:#e8a02022;"></div>
+    </div>
+
+    <div class="dist-row" style="margin-bottom:10px;">
+      <div class="box" style="border-color:#e8a020;">
+        <div class="box-title" style="color:#e8a020;">cdylib · DLL / .so
+          <span class="badge" style="background:#e8a02022;color:#e8a020;border:1px solid #e8a02044;">offline</span>
+        </div>
+        <div class="item"><div class="dot" style="background:#e8a020;"></div><span class="item-text">ifcx.dll (Windows)</span></div>
+        <div class="item"><div class="dot" style="background:#e8a020;"></div><span class="item-text">libifcx.so (Linux)</span></div>
+        <div class="item"><div class="dot" style="background:#e8a020;"></div><span class="item-text">directe C-ABI integratie</span></div>
+        <div class="item"><div class="dot" style="background:#e8a020;"></div><span class="item-text">geen netwerk nodig</span></div>
+      </div>
+      <div class="box" style="border-color:#ce4a1f;">
+        <div class="box-title" style="color:#ce4a1f;">bin · Axum server
+          <span class="badge" style="background:#ce4a1f22;color:#ce4a1f;border:1px solid #ce4a1f44;">online/LAN</span>
+        </div>
+        <div class="item"><div class="dot" style="background:#ce4a1f;"></div><span class="item-text">HTTP REST API</span></div>
+        <div class="item"><div class="dot" style="background:#ce4a1f;"></div><span class="item-text">Docker / NAS</span></div>
+        <div class="item"><div class="dot" style="background:#ce4a1f;"></div><span class="item-text">IFCX in / IFCX out</span></div>
+        <div class="item"><div class="dot" style="background:#ce4a1f;"></div><span class="item-text">WebSocket streaming</span></div>
+      </div>
+      <div class="box" style="border-color:#e8a020;">
+        <div class="box-title" style="color:#e8a020;">Tauri · desktop app
+          <span class="badge" style="background:#e8a02022;color:#e8a020;border:1px solid #e8a02044;">offline</span>
+        </div>
+        <div class="item"><div class="dot" style="background:#e8a020;"></div><span class="item-text">Rust core embedded</span></div>
+        <div class="item"><div class="dot" style="background:#e8a020;"></div><span class="item-text">WebView frontend</span></div>
+        <div class="item"><div class="dot" style="background:#e8a020;"></div><span class="item-text">Windows / Linux / macOS</span></div>
+        <div class="item"><div class="dot" style="background:#e8a020;"></div><span class="item-text">&lt;15MB installer</span></div>
+      </div>
+      <div class="box" style="border-color:#58a6ff;">
+        <div class="box-title" style="color:#58a6ff;">WASM · browser
+          <span class="badge" style="background:#58a6ff22;color:#58a6ff;border:1px solid #58a6ff44;">offline capable</span>
+        </div>
+        <div class="item"><div class="dot" style="background:#58a6ff;"></div><span class="item-text">wasm-bindgen</span></div>
+        <div class="item"><div class="dot" style="background:#58a6ff;"></div><span class="item-text">~3–6 MB binary</span></div>
+        <div class="item"><div class="dot" style="background:#58a6ff;"></div><span class="item-text">zelfde 3D editor JS</span></div>
+        <div class="item"><div class="dot" style="background:#58a6ff;"></div><span class="item-text">PWA / service worker</span></div>
+      </div>
+    </div>
+
+    <div class="arr-v">
+      <div class="shaft" style="background:#ce4a1f;"></div>
+      <div class="lbl">alle targets gebruiken dezelfde kernel</div>
+      <div class="tip-down" style="border-top:5px solid #ce4a1f;"></div>
+    </div>
+
+    <!-- ── IFCX KERNEL ─────────────────────────────── -->
+    <div class="section-title" style="margin-top:8px;">
+      <div class="num" style="background:#ce4a1f22;border:1px solid #ce4a1f;color:#ce4a1f;">1</div>
+      <div class="txt" style="color:#ce4a1f;">ifcx-rs kernel · IFCX is de enige source of truth</div>
+      <div class="rule" style="background:#ce4a1f22;"></div>
+    </div>
+
+    <!-- API endpoints -->
+    <div class="kernel" style="margin-bottom:8px;">
+      <div class="kernel-title">
+        api/ · Axum HTTP (server build only)
+        <span class="badge" style="background:#ce4a1f22;color:#ce4a1f;border:1px solid #ce4a1f44;">IFCX in / IFCX out</span>
+      </div>
+      <div class="api-grid">
+        <div class="api-ep"><div class="ep">GET /nodes</div><div class="edesc">query entities</div></div>
+        <div class="api-ep"><div class="ep">GET /nodes/:guid</div><div class="edesc">lazy load payload</div></div>
+        <div class="api-ep"><div class="ep">GET /components</div><div class="edesc">filter components</div></div>
+        <div class="api-ep"><div class="ep">POST /validate</div><div class="edesc">schema check</div></div>
+        <div class="api-ep"><div class="ep">POST /merge</div><div class="edesc">layer compositie</div></div>
+        <div class="api-ep"><div class="ep">GET /geometry</div><div class="edesc">mesh on demand</div></div>
+        <div class="api-ep"><div class="ep">GET /spatial</div><div class="edesc">viewport query</div></div>
+        <div class="api-ep"><div class="ep">GET /cache/status</div><div class="edesc">cache hit/miss</div></div>
+        <div class="api-ep"><div class="ep">WS /session</div><div class="edesc">editor stream</div></div>
+      </div>
+    </div>
+
+    <!-- Core modules -->
+    <div class="two-col">
+      <div class="box" style="border-color:#3fb950;">
+        <div class="box-title" style="color:#3fb950;">core/parser.rs
+          <span class="badge" style="background:#3fb95022;color:#3fb950;border:1px solid #3fb95044;">Fase 1</span>
+        </div>
+        <div class="item"><div class="dot" style="background:#3fb950;"></div><span class="item-text">streaming JSON parse</span></div>
+        <div class="item"><div class="dot" style="background:#3fb950;"></div><span class="item-text">sonic-rs (SIMD 3-5× sneller)</span></div>
+        <div class="item"><div class="dot" style="background:#3fb950;"></div><span class="item-text">byte-offset index per node</span></div>
+        <div class="item"><div class="dot" style="background:#3fb950;"></div><span class="item-text">nooit volledig in RAM</span></div>
+      </div>
+      <div class="box" style="border-color:#3fb950;">
+        <div class="box-title" style="color:#3fb950;">core/ecs.rs
+          <span class="badge" style="background:#3fb95022;color:#3fb950;border:1px solid #3fb95044;">Fase 1</span>
+        </div>
+        <div class="item"><div class="dot" style="background:#3fb950;"></div><span class="item-text">Entity Component System</span></div>
+        <div class="item"><div class="dot" style="background:#3fb950;"></div><span class="item-text">struct-of-arrays layout</span></div>
+        <div class="item"><div class="dot" style="background:#3fb950;"></div><span class="item-text">hecs crate</span></div>
+        <div class="item"><div class="dot" style="background:#3fb950;"></div><span class="item-text">inheritance chain resolver</span></div>
+      </div>
+      <div class="box" style="border-color:#3fb950;">
+        <div class="box-title" style="color:#3fb950;">query/engine.rs
+          <span class="badge" style="background:#3fb95022;color:#3fb950;border:1px solid #3fb95044;">Fase 1</span>
+        </div>
+        <div class="item"><div class="dot" style="background:#3fb950;"></div><span class="item-text">filter op type / GUID</span></div>
+        <div class="item"><div class="dot" style="background:#3fb950;"></div><span class="item-text">component traversal</span></div>
+        <div class="item"><div class="dot" style="background:#3fb950;"></div><span class="item-text">rayon parallelle iteratie</span></div>
+        <div class="item"><div class="dot" style="background:#3fb950;"></div><span class="item-text">aggregate properties</span></div>
+      </div>
+      <div class="box" style="border-color:#3fb950;">
+        <div class="box-title" style="color:#3fb950;">core/schema.rs
+          <span class="badge" style="background:#3fb95022;color:#3fb950;border:1px solid #3fb95044;">Fase 1</span>
+        </div>
+        <div class="item"><div class="dot" style="background:#3fb950;"></div><span class="item-text">jsonschema validatie</span></div>
+        <div class="item"><div class="dot" style="background:#3fb950;"></div><span class="item-text">ifcx.dev live schema</span></div>
+        <div class="item"><div class="dot" style="background:#3fb950;"></div><span class="item-text">evolutie-tolerant</span></div>
+        <div class="item"><div class="dot" style="background:#3fb950;"></div><span class="item-text">onbekende components ok</span></div>
+      </div>
+    </div>
+
+    <!-- PERFORMANCE STACK -->
+    <div class="section-title" style="margin-top:6px;">
+      <div class="num" style="background:#bc8cff22;border:1px solid #bc8cff;color:#bc8cff;">⚡</div>
+      <div class="txt" style="color:#bc8cff;">Performance stack — 500MB+ baseline</div>
+      <div class="rule" style="background:#bc8cff22;"></div>
+    </div>
+
+    <div class="perf-block">
+      <div class="perf-grid">
+        <div class="perf-item">
+          <div class="prob">500MB JSON parse</div>
+          <div class="sol">sonic-rs (SIMD)</div>
+          <div class="crt">3–5× vs serde_json</div>
+        </div>
+        <div class="perf-item">
+          <div class="prob">Memory druk</div>
+          <div class="sol">memmap2 (mmap IO)</div>
+          <div class="crt">OS paginated, geen heap</div>
+        </div>
+        <div class="perf-item">
+          <div class="prob">Single-threaded parse</div>
+          <div class="sol">rayon threadpool</div>
+          <div class="crt">parallelle node parsing</div>
+        </div>
+        <div class="perf-item">
+          <div class="prob">Herhaald openen</div>
+          <div class="sol">rkyv binary cache</div>
+          <div class="crt">zero-copy, &lt;1 sec reopen</div>
+        </div>
+        <div class="perf-item">
+          <div class="prob">Spatial queries</div>
+          <div class="sol">BVH / bvh-arena</div>
+          <div class="crt">viewport culling O(log n)</div>
+        </div>
+        <div class="perf-item">
+          <div class="prob">GPU bottleneck</div>
+          <div class="sol">wgpu GPU instancing</div>
+          <div class="crt">1 draw call per type</div>
+        </div>
+        <div class="perf-item">
+          <div class="prob">ECS cache misses</div>
+          <div class="sol">struct-of-arrays layout</div>
+          <div class="crt">cache-line friendly</div>
+        </div>
+        <div class="perf-item">
+          <div class="prob">Geometry overhead</div>
+          <div class="sol">LOD tiers (3 niveaus)</div>
+          <div class="crt">camera-distance driven</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- LAZY LOADING PIPELINE -->
+    <div class="section-title" style="margin-top:6px;">
+      <div class="num" style="background:#e8a02022;border:1px solid #e8a020;color:#e8a020;">↓</div>
+      <div class="txt" style="color:#e8a020;">Lazy loading pipeline — index first, data on demand</div>
+      <div class="rule" style="background:#e8a02022;"></div>
+    </div>
+
+    <div class="lazy-pipeline">
+      <div class="lazy-steps">
+        <div class="lazy-step">
+          <div class="ls-icon">📄</div>
+          <div class="ls-title">1 · File</div>
+          <div class="ls-desc">mmap</div>
+          <div class="ls-desc">niet in RAM</div>
+        </div>
+        <div class="lazy-arrow">→</div>
+        <div class="lazy-step">
+          <div class="ls-icon">🗂</div>
+          <div class="ls-title">2 · Index</div>
+          <div class="ls-desc">GUID + offset</div>
+          <div class="ls-desc">BVH spatial</div>
+        </div>
+        <div class="lazy-arrow">→</div>
+        <div class="lazy-step">
+          <div class="ls-icon">🎯</div>
+          <div class="ls-title">3 · Viewport</div>
+          <div class="ls-desc">frustum cull</div>
+          <div class="ls-desc">visible nodes only</div>
+        </div>
+        <div class="lazy-arrow">→</div>
+        <div class="lazy-step">
+          <div class="ls-icon">📐</div>
+          <div class="ls-title">4 · Geometry</div>
+          <div class="ls-desc">LOD per afstand</div>
+          <div class="ls-desc">on demand load</div>
+        </div>
+        <div class="lazy-arrow">→</div>
+        <div class="lazy-step">
+          <div class="ls-icon">🏷</div>
+          <div class="ls-title">5 · Properties</div>
+          <div class="ls-desc">alleen bij selectie</div>
+          <div class="ls-desc">of expliciete query</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- BINARY CACHE -->
+    <div class="cache-block">
+      <div class="box-title" style="color:#3fb950;margin-bottom:8px;">
+        cache/ · rkyv binary cache — zero-copy reopen
+        <span class="badge" style="background:#3fb95022;color:#3fb950;border:1px solid #3fb95044;">Fase 1</span>
+      </div>
+      <div class="cache-row">
+        <div class="cache-node" style="border:1px solid #e8a02033;">
+          <div class="cn-label" style="color:#e8a020;">model.ifcx</div>
+          <div class="cn-desc">eerste open: seconden</div>
+        </div>
+        <div class="cache-arrow">→</div>
+        <div class="cache-node" style="border:1px solid #3fb95033;">
+          <div class="cn-label" style="color:#3fb950;">parse + index</div>
+          <div class="cn-desc">rkyv serialisatie</div>
+        </div>
+        <div class="cache-arrow">→</div>
+        <div class="cache-node" style="border:1px solid #58a6ff33;">
+          <div class="cn-label" style="color:#58a6ff;">model.ifcx.cache</div>
+          <div class="cn-desc">tweede open: &lt;1 sec</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="arr-v" style="margin:4px 0;">
+      <div class="shaft dashed"></div>
+      <div class="tip-down" style="border-top:4px solid #30363d;"></div>
+    </div>
+
+    <!-- GEOMETRY LAYER -->
+    <div class="section-title">
+      <div class="num" style="background:#e8a02022;border:1px solid #e8a020;color:#e8a020;">2</div>
+      <div class="txt" style="color:#e8a020;">Geometry layer — Fase 2</div>
+      <div class="rule" style="background:#e8a02022;"></div>
+    </div>
+
+    <div class="two-col">
+      <div class="box" style="border-color:#e8a020;">
+        <div class="box-title" style="color:#e8a020;">geometry/triangulate.rs</div>
+        <div class="item"><div class="dot" style="background:#e8a020;"></div><span class="item-text">mesh uit IFCX geometry</span></div>
+        <div class="item"><div class="dot" style="background:#e8a020;"></div><span class="item-text">ifc-lite ref. (MIT)</span></div>
+        <div class="item"><div class="dot" style="background:#e8a020;"></div><span class="item-text">glTF / draco export</span></div>
+      </div>
+      <div class="box" style="border-color:#e8a020;">
+        <div class="box-title" style="color:#e8a020;">geometry/lod.rs</div>
+        <div class="item"><div class="dot" style="background:#e8a020;"></div><span class="item-text">LOD 0: bounding box</span></div>
+        <div class="item"><div class="dot" style="background:#e8a020;"></div><span class="item-text">LOD 1: vereenvoudigd</span></div>
+        <div class="item"><div class="dot" style="background:#e8a020;"></div><span class="item-text">LOD 2: volledig mesh</span></div>
+      </div>
+    </div>
+
+    <div class="arr-v" style="margin:4px 0;">
+      <div class="shaft dashed"></div>
+      <div class="tip-down" style="border-top:4px solid #30363d;"></div>
+    </div>
+
+    <!-- EDITOR / WASM LAYER -->
+    <div class="section-title">
+      <div class="num" style="background:#58a6ff22;border:1px solid #58a6ff;color:#58a6ff;">3</div>
+      <div class="txt" style="color:#58a6ff;">Editor + WASM — Fase 3</div>
+      <div class="rule" style="background:#58a6ff22;"></div>
+    </div>
+
+    <div class="two-col">
+      <div class="box" style="border-color:#58a6ff;">
+        <div class="box-title" style="color:#58a6ff;">layers/delta.rs</div>
+        <div class="item"><div class="dot" style="background:#58a6ff;"></div><span class="item-text">non-destructive edits</span></div>
+        <div class="item"><div class="dot" style="background:#58a6ff;"></div><span class="item-text">base + delta IFCX layers</span></div>
+        <div class="item"><div class="dot" style="background:#58a6ff;"></div><span class="item-text">IFC5 native concept</span></div>
+      </div>
+      <div class="box" style="border-color:#58a6ff;">
+        <div class="box-title" style="color:#58a6ff;">wasm/bindings.rs</div>
+        <div class="item"><div class="dot" style="background:#58a6ff;"></div><span class="item-text">wasm-bindgen exports</span></div>
+        <div class="item"><div class="dot" style="background:#58a6ff;"></div><span class="item-text">Tauri commands bridge</span></div>
+        <div class="item"><div class="dot" style="background:#58a6ff;"></div><span class="item-text">WebGPU / wgpu renderer</span></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ╔══════════════════════════════╗ -->
+  <!-- ║  RIGHT — Data sources        ║ -->
+  <!-- ╚══════════════════════════════╝ -->
+  <div>
+    <div class="section-title">
+      <div class="num" style="background:#3fb95022;border:1px solid #3fb950;color:#3fb950;">↑</div>
+      <div class="txt" style="color:#3fb950;">Data bronnen</div>
+      <div class="rule" style="background:#3fb95022;"></div>
+    </div>
+
+    <div class="box" style="border-color:#3fb950;margin-bottom:7px;">
+      <div class="box-title" style="color:#3fb950;">
+        model.ifcx
+        <span class="badge" style="background:#3fb95022;color:#3fb950;border:1px solid #3fb95044;">base layer</span>
+      </div>
+      <div class="item"><div class="dot" style="background:#3fb950;"></div><span class="item-text">read-only origineel</span></div>
+      <div class="item"><div class="dot" style="background:#3fb950;"></div><span class="item-text">buildingSMART schema</span></div>
+      <div class="item"><div class="dot" style="background:#3fb950;"></div><span class="item-text">500MB+ supported</span></div>
+    </div>
+
+    <div class="box" style="border-color:#e8a020;margin-bottom:7px;">
+      <div class="box-title" style="color:#e8a020;">
+        edit_session.ifcx
+        <span class="badge" style="background:#e8a02022;color:#e8a020;border:1px solid #e8a02044;">delta layer</span>
+      </div>
+      <div class="item"><div class="dot" style="background:#e8a020;"></div><span class="item-text">alleen diff wegschrijven</span></div>
+      <div class="item"><div class="dot" style="background:#e8a020;"></div><span class="item-text">non-destructive</span></div>
+      <div class="item"><div class="dot" style="background:#e8a020;"></div><span class="item-text">IFC5 native</span></div>
+    </div>
+
+    <div class="box" style="border-color:#8b949e;margin-bottom:7px;">
+      <div class="box-title" style="color:#8b949e;">
+        Revit / Authoring
+        <span class="badge" style="background:#8b949e22;color:#8b949e;border:1px solid #8b949e44;">export</span>
+      </div>
+      <div class="item"><div class="dot" style="background:#8b949e;"></div><span class="item-text">IFC4 → IFCX conversie</span></div>
+      <div class="item"><div class="dot" style="background:#8b949e;"></div><span class="item-text">IfcPatch / IFC5 tools</span></div>
+      <div class="item"><div class="dot" style="background:#8b949e;"></div><span class="item-text">toekomstig: native</span></div>
+    </div>
+
+    <!-- Layer compositor -->
+    <div class="layer-comp">
+      <div style="font-size:9px;color:#6e7681;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;">Runtime Layer Compositie</div>
+      <div class="layer-row-item" style="background:#3fb95011;border:1px solid #3fb95033;">
+        <div class="sq" style="background:#3fb950;"></div>
+        <span style="font-size:9px;color:#3fb950;">model.ifcx</span>
+        <span style="font-size:8px;color:#6e7681;margin-left:auto;">base · read-only</span>
+      </div>
+      <div style="display:flex;justify-content:center;"><div style="width:1px;height:7px;background:#30363d;"></div></div>
+      <div class="layer-row-item" style="background:#e8a02011;border:1px solid #e8a02033;">
+        <div class="sq" style="background:#e8a020;"></div>
+        <span style="font-size:9px;color:#e8a020;">edit.ifcx</span>
+        <span style="font-size:8px;color:#6e7681;margin-left:auto;">delta · diff only</span>
+      </div>
+      <div style="display:flex;justify-content:center;"><div style="width:1px;height:7px;background:#30363d;"></div></div>
+      <div class="layer-row-item" style="background:#58a6ff11;border:1px solid #58a6ff33;">
+        <div class="sq" style="background:#58a6ff;"></div>
+        <span style="font-size:9px;color:#58a6ff;">merged view</span>
+        <span style="font-size:8px;color:#6e7681;margin-left:auto;">runtime · lazy</span>
+      </div>
+    </div>
+
+    <!-- Cache status -->
+    <div class="box" style="border-color:#3fb950;margin-top:8px;">
+      <div class="box-title" style="color:#3fb950;">rkyv binary cache</div>
+      <div class="item"><div class="dot" style="background:#3fb950;"></div><span class="item-text">model.ifcx.cache</span></div>
+      <div class="item"><div class="dot" style="background:#3fb950;"></div><span class="item-text">zero-copy mmap</span></div>
+      <div class="item"><div class="dot" style="background:#3fb950;"></div><span class="item-text">spatial index ingebakken</span></div>
+      <div class="item"><div class="dot" style="background:#3fb950;"></div><span class="item-text">invalidatie op file-hash</span></div>
+    </div>
+
+    <!-- Tauri detail -->
+    <div class="box" style="border-color:#e8a020;margin-top:8px;">
+      <div class="box-title" style="color:#e8a020;">Tauri desktop</div>
+      <div class="item"><div class="dot" style="background:#e8a020;"></div><span class="item-text">zelfde HTML/JS als browser</span></div>
+      <div class="item"><div class="dot" style="background:#e8a020;"></div><span class="item-text">Rust core via commands</span></div>
+      <div class="item"><div class="dot" style="background:#e8a020;"></div><span class="item-text">geen Axum nodig offline</span></div>
+      <div class="item"><div class="dot" style="background:#e8a020;"></div><span class="item-text">auto-update via GitHub</span></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══ FOOTER ═══════════════════════════════════════════════════════ -->
+<div class="footer">
+  <span class="badge" style="background:#ce4a1f22;color:#ce4a1f;border:1px solid #ce4a1f44;">sonic-rs (SIMD)</span>
+  <span class="badge" style="background:#ce4a1f22;color:#ce4a1f;border:1px solid #ce4a1f44;">memmap2</span>
+  <span class="badge" style="background:#ce4a1f22;color:#ce4a1f;border:1px solid #ce4a1f44;">rayon</span>
+  <span class="badge" style="background:#ce4a1f22;color:#ce4a1f;border:1px solid #ce4a1f44;">rkyv</span>
+  <span class="badge" style="background:#ce4a1f22;color:#ce4a1f;border:1px solid #ce4a1f44;">hecs</span>
+  <span class="badge" style="background:#ce4a1f22;color:#ce4a1f;border:1px solid #ce4a1f44;">axum 0.7</span>
+  <span class="badge" style="background:#ce4a1f22;color:#ce4a1f;border:1px solid #ce4a1f44;">bvh-arena</span>
+  <span class="badge" style="background:#e8a02022;color:#e8a020;border:1px solid #e8a02044;">tauri v2</span>
+  <span class="badge" style="background:#e8a02022;color:#e8a020;border:1px solid #e8a02044;">wgpu</span>
+  <span class="badge" style="background:#58a6ff22;color:#58a6ff;border:1px solid #58a6ff44;">wasm-bindgen</span>
+  <span class="badge" style="background:#3fb95022;color:#3fb950;border:1px solid #3fb95044;">pyo3 (opt.)</span>
+  <span class="badge" style="background:#bc8cff22;color:#bc8cff;border:1px solid #bc8cff44;">ifc-lite ref. MIT</span>
+  <span class="badge" style="background:#8b949e22;color:#8b949e;border:1px solid #8b949e44;">ifcx.dev schema</span>
+  <span class="copy">LGPL / MIT · Open AEC Foundation · v2</span>
+</div>
+
+</body>
+</html>

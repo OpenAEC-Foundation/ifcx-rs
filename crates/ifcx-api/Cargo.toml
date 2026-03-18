@@ -1,0 +1,15 @@
+[package]
+name = "ifcx-api"
+description = "Axum REST/WebSocket server for IFCX operations"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+ifcx-core = { workspace = true }
+ifcx-geometry = { workspace = true }
+axum = { workspace = true }
+tokio = { workspace = true }
+tower-http = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
