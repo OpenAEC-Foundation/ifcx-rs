@@ -61,6 +61,8 @@ pub struct IfcxDocument {
     #[serde(default)]
     pub schemas: HashMap<String, serde_json::Value>,
     pub data: Vec<IfcxDataEntry>,
+    #[serde(flatten)]
+    pub additional: HashMap<String, serde_json::Value>,
 }
 
 /// Document header with metadata.
@@ -72,12 +74,16 @@ pub struct IfcxHeader {
     pub data_version: String,
     pub author: String,
     pub timestamp: String,
+    #[serde(flatten)]
+    pub additional: HashMap<String, serde_json::Value>,
 }
 
 /// Schema import reference.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct IfcxImport {
     pub uri: String,
+    #[serde(flatten)]
+    pub additional: HashMap<String, serde_json::Value>,
 }
 
 /// A single data entry in the IFCX flat list.
@@ -90,11 +96,13 @@ pub struct IfcxImport {
 pub struct IfcxDataEntry {
     pub path: String,
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
-    pub children: HashMap<String, String>,
+    pub children: HashMap<String, Option<String>>,
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
-    pub inherits: HashMap<String, String>,
+    pub inherits: HashMap<String, Option<String>>,
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub attributes: HashMap<String, serde_json::Value>,
+    #[serde(flatten)]
+    pub additional: HashMap<String, serde_json::Value>,
 }
 
 // ---------------------------------------------------------------------------
@@ -111,13 +119,16 @@ impl IfcxDocument {
                 data_version: "1.0.0".to_string(),
                 author: author.to_string(),
                 timestamp: String::new(),
+                additional: HashMap::new(),
             },
             imports: vec![IfcxImport {
                 uri: "https://ifcx.dev/@standards.buildingsmart.org/ifc/core/ifc@v5a.ifcx"
                     .to_string(),
+                additional: HashMap::new(),
             }],
             schemas: HashMap::new(),
             data: Vec::new(),
+            additional: HashMap::new(),
         }
     }
 
@@ -158,6 +169,7 @@ impl IfcxDataEntry {
             children: HashMap::new(),
             inherits: HashMap::new(),
             attributes: HashMap::new(),
+            additional: HashMap::new(),
         }
     }
 
@@ -203,7 +215,8 @@ impl IfcxDataEntry {
 
     /// Add a child entry reference.
     pub fn add_child(&mut self, name: &str, path: &str) {
-        self.children.insert(name.to_string(), path.to_string());
+        self.children
+            .insert(name.to_string(), Some(path.to_string()));
     }
 }
 
@@ -283,9 +296,6 @@ mod tests {
         let restored: IfcxDocument = serde_json::from_str(&json).unwrap();
 
         assert_eq!(restored.len(), 1);
-        assert_eq!(
-            restored.data[0].ifc_class(),
-            Some(ifc_class::BUILDING)
-        );
+        assert_eq!(restored.data[0].ifc_class(), Some(ifc_class::BUILDING));
     }
 }

@@ -20,8 +20,7 @@ impl<'a> Query<'a> {
 
     /// Filter by IFC class code.
     pub fn by_class(mut self, class_code: &str) -> Self {
-        self.entries
-            .retain(|e| e.ifc_class() == Some(class_code));
+        self.entries.retain(|e| e.ifc_class() == Some(class_code));
         self
     }
 
@@ -35,9 +34,13 @@ impl<'a> Query<'a> {
     /// Filter entries that are children of a specific parent path.
     pub fn children_of(mut self, parent_path: &str, doc: &'a IfcxDocument) -> Self {
         if let Some(parent) = doc.find(parent_path) {
-            let child_paths: std::collections::HashSet<&str> =
-                parent.children.values().map(|s| s.as_str()).collect();
-            self.entries.retain(|e| child_paths.contains(e.path.as_str()));
+            let child_paths: std::collections::HashSet<&str> = parent
+                .children
+                .values()
+                .filter_map(|s| s.as_deref())
+                .collect();
+            self.entries
+                .retain(|e| child_paths.contains(e.path.as_str()));
         } else {
             self.entries.clear();
         }
@@ -105,9 +108,7 @@ mod tests {
     #[test]
     fn test_query_has_attribute() {
         let doc = test_doc();
-        let with_isso = Query::new(&doc)
-            .has_attribute("isso51::room")
-            .collect();
+        let with_isso = Query::new(&doc).has_attribute("isso51::room").collect();
         assert_eq!(with_isso.len(), 1);
         assert_eq!(with_isso[0].ifc_class(), Some(ifc_class::SPACE));
     }
@@ -115,9 +116,7 @@ mod tests {
     #[test]
     fn test_query_children_of() {
         let doc = test_doc();
-        let children = Query::new(&doc)
-            .children_of("storey-1", &doc)
-            .collect();
+        let children = Query::new(&doc).children_of("storey-1", &doc).collect();
         assert_eq!(children.len(), 2); // space + wall
     }
 
