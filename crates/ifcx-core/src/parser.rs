@@ -81,3 +81,23 @@ mod tests {
         assert_eq!(restored.header.ifcx_version, doc.header.ifcx_version);
     }
 }
+
+#[cfg(test)]
+mod lenient_tests {
+    use super::*;
+
+    #[test]
+    fn a_file_with_a_minimal_header_and_no_imports_reads() {
+        // only a version in the header, no imports, and a field this crate does not know
+        let doc = from_str(r#"{"header":{"ifcxVersion":"ifcx_alpha"},"data":[{"path":"a","children":{"b":null},"attributes":{"bsi::ifc::class":{"code":"IfcWall"}},"extra":1}]}"#).unwrap();
+        assert_eq!(doc.header.ifcx_version, "ifcx_alpha");
+        assert!(doc.header.author.is_empty() && doc.imports.is_empty());
+        let entry = &doc.data[0];
+        assert_eq!(entry.ifc_class(), Some("IfcWall"));
+        // an explicit null keeps its place: it removes child b of a weaker layer
+        assert_eq!(entry.children.get("b"), Some(&None));
+        assert!(entry.additional.contains_key("extra"));
+        // without any header at all
+        assert!(from_str(r#"{"data":[]}"#).unwrap().data.is_empty());
+    }
+}

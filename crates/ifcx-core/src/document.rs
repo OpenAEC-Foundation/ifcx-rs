@@ -56,7 +56,11 @@ pub mod ifc_class {
 /// Top-level IFCX document.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct IfcxDocument {
+    /// Files in the wild leave the header out or keep only part of it; what is missing reads as
+    /// empty.
+    #[serde(default)]
     pub header: IfcxHeader,
+    #[serde(default)]
     pub imports: Vec<IfcxImport>,
     #[serde(default)]
     pub schemas: HashMap<String, serde_json::Value>,
@@ -66,13 +70,18 @@ pub struct IfcxDocument {
 }
 
 /// Document header with metadata.
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct IfcxHeader {
+    #[serde(default)]
     pub id: String,
+    #[serde(default)]
     pub ifcx_version: String,
+    #[serde(default)]
     pub data_version: String,
+    #[serde(default)]
     pub author: String,
+    #[serde(default)]
     pub timestamp: String,
     #[serde(flatten)]
     pub additional: HashMap<String, serde_json::Value>,
