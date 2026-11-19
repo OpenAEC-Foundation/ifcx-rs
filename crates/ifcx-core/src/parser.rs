@@ -66,7 +66,7 @@ mod tests {
 
         let doc = from_str(json).unwrap();
         assert!(doc.is_empty());
-        assert_eq!(doc.header.author, "test");
+        assert_eq!(doc.header.unwrap().author.as_deref(), Some("test"));
     }
 
     #[test]
@@ -78,7 +78,10 @@ mod tests {
         to_file(&doc, &path).unwrap();
         let restored = from_file(&path).unwrap();
 
-        assert_eq!(restored.header.ifcx_version, doc.header.ifcx_version);
+        assert_eq!(
+            restored.header.unwrap().ifcx_version,
+            doc.header.unwrap().ifcx_version
+        );
     }
 }
 
@@ -90,8 +93,9 @@ mod lenient_tests {
     fn a_file_with_a_minimal_header_and_no_imports_reads() {
         // only a version in the header, no imports, and a field this crate does not know
         let doc = from_str(r#"{"header":{"ifcxVersion":"ifcx_alpha"},"data":[{"path":"a","children":{"b":null},"attributes":{"bsi::ifc::class":{"code":"IfcWall"}},"extra":1}]}"#).unwrap();
-        assert_eq!(doc.header.ifcx_version, "ifcx_alpha");
-        assert!(doc.header.author.is_empty() && doc.imports.is_empty());
+        let header = doc.header.as_ref().unwrap();
+        assert_eq!(header.ifcx_version.as_deref(), Some("ifcx_alpha"));
+        assert!(header.author.is_none() && doc.imports.is_empty());
         let entry = &doc.data[0];
         assert_eq!(entry.ifc_class(), Some("IfcWall"));
         // an explicit null keeps its place: it removes child b of a weaker layer

@@ -56,10 +56,15 @@ pub mod ifc_class {
 /// Top-level IFCX document.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct IfcxDocument {
-    /// Files in the wild leave the header out or keep only part of it; what is missing reads as
-    /// empty.
-    #[serde(default)]
-    pub header: IfcxHeader,
+    /// Optional source metadata. An absent header stays absent when saved; an explicit
+    /// empty header stays `{}`. Only constructors for new documents supply metadata.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "present"
+    )]
+    #[schemars(with = "IfcxHeader")]
+    pub header: Option<IfcxHeader>,
     #[serde(default)]
     pub imports: Vec<IfcxImport>,
     #[serde(default)]
@@ -69,22 +74,60 @@ pub struct IfcxDocument {
     pub additional: HashMap<String, serde_json::Value>,
 }
 
-/// Document header with metadata.
+/// Document header with optional metadata.
+///
+/// `None` means a field was not supplied; `Some("")` preserves an explicitly empty
+/// string. Saving does not invent metadata. Explicit JSON `null` remains invalid.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct IfcxHeader {
-    #[serde(default)]
-    pub id: String,
-    #[serde(default)]
-    pub ifcx_version: String,
-    #[serde(default)]
-    pub data_version: String,
-    #[serde(default)]
-    pub author: String,
-    #[serde(default)]
-    pub timestamp: String,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "present"
+    )]
+    #[schemars(with = "String")]
+    pub id: Option<String>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "present"
+    )]
+    #[schemars(with = "String")]
+    pub ifcx_version: Option<String>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "present"
+    )]
+    #[schemars(with = "String")]
+    pub data_version: Option<String>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "present"
+    )]
+    #[schemars(with = "String")]
+    pub author: Option<String>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "present"
+    )]
+    #[schemars(with = "String")]
+    pub timestamp: Option<String>,
     #[serde(flatten)]
     pub additional: HashMap<String, serde_json::Value>,
+}
+
+// Serde's default handles absence. A present value must deserialize as T rather
+// than Option<T>, so explicit null is rejected instead of silently discarded.
+fn present<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    T::deserialize(deserializer).map(Some)
 }
 
 /// Schema import reference.
@@ -122,14 +165,14 @@ impl IfcxDocument {
     /// Create a new empty IFCX document.
     pub fn new(author: &str) -> Self {
         Self {
-            header: IfcxHeader {
-                id: uuid::Uuid::new_v4().to_string(),
-                ifcx_version: "ifcx_alpha".to_string(),
-                data_version: "1.0.0".to_string(),
-                author: author.to_string(),
-                timestamp: String::new(),
+            header: Some(IfcxHeader {
+                id: Some(uuid::Uuid::new_v4().to_string()),
+                ifcx_version: Some("ifcx_alpha".to_string()),
+                data_version: Some("1.0.0".to_string()),
+                author: Some(author.to_string()),
+                timestamp: Some(String::new()),
                 additional: HashMap::new(),
-            },
+            }),
             imports: vec![IfcxImport {
                 uri: "https://ifcx.dev/@standards.buildingsmart.org/ifc/core/ifc@v5a.ifcx"
                     .to_string(),
@@ -241,7 +284,12 @@ mod tests {
     fn test_new_document() {
         let doc = IfcxDocument::new("test");
         assert!(doc.is_empty());
-        assert_eq!(doc.header.ifcx_version, "ifcx_alpha");
+        let header = doc.header.unwrap();
+        assert!(uuid::Uuid::parse_str(header.id.as_deref().unwrap()).is_ok());
+        assert_eq!(header.ifcx_version.as_deref(), Some("ifcx_alpha"));
+        assert_eq!(header.data_version.as_deref(), Some("1.0.0"));
+        assert_eq!(header.author.as_deref(), Some("test"));
+        assert_eq!(header.timestamp.as_deref(), Some(""));
     }
 
     #[test]

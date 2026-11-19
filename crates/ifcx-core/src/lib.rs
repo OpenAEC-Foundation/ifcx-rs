@@ -8,6 +8,15 @@
 //! - **Performance first** — streaming parse, lazy loading, zero-copy binary cache
 //! - **Namespace extensible** — custom namespaces via the standard IFCX mechanism
 //!
+//! Header metadata is optional: an absent header or field stays absent when saved,
+//! while an explicitly empty string stays empty. In the Rust API these are
+//! `None` and `Some(String::new())`, respectively. Explicit JSON `null` is rejected
+//! for headers and their string fields. [`IfcxDocument::new`] supplies metadata
+//! for a new document; parsing and saving never generate it. Empty `imports` and
+//! `schemas` are still written even when the source omitted those collections.
+//! The derived JSON schema describes this reader model, not a complete external
+//! buildingSMART conformance check.
+//!
 //! ## Modules
 //!
 //! - [`document`] — IFCX document model (IfcxDocument, IfcxDataEntry, IfcxHeader)
@@ -38,6 +47,7 @@
 //! }"#;
 //! let doc: IfcxDocument = serde_json::from_str(json).unwrap();
 //! assert!(doc.data.is_empty());
+//! assert_eq!(doc.header.as_ref().unwrap().author.as_deref(), Some("test"));
 //! ```
 
 pub mod cache;
