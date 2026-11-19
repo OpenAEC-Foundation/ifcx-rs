@@ -13,7 +13,14 @@ uuid = { workspace = true }
 thiserror = { workspace = true }
 hecs = { workspace = true }
 rayon = { workspace = true }
+
+# memory-mapped reading is for native builds; the browser (wasm32) has no files to map
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 memmap2 = { workspace = true }
+
+# in the browser a new id takes its randomness from the JavaScript host
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+uuid = { workspace = true, features = ["js"] }
 
 # sonic-rs for SIMD JSON parsing — uncomment when stabilized
 # sonic-rs = { workspace = true }
